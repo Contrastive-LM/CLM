@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clm"
+version = "0.1.0"
+description = "CLM: contrastive language model serving engine and System One API (typed noul / choice / score questions over state)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Jacky Kwok", email = "jackykwok@berkeley.edu" }]
+keywords = ["contrastive", "embeddings", "system-one", "verifier", "ranking"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Private :: Do Not Upload",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.24",
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+# the serving engine (projection heads) and the HTTP API
+serve = ["torch>=2.1", "fastapi>=0.100", "uvicorn>=0.23"]
+# download checkpoints from the Hugging Face Hub with the hub client (plain HTTPS works without it)
+hf = ["huggingface_hub>=0.20"]
+# run the Qwen3-8B embedder yourself (GPU)
+vllm = ["vllm>=0.6"]
+all = ["clm[serve,hf]"]
+
+[project.scripts]
+clm-serve = "clm.server:main"
+clm-download = "clm.heads:download_main"
+
+[project.urls]
+Homepage = "https://github.com/Contrastive-LM/CLM"
+Blog = "https://contrastive-lm.notion.site"
+Discord = "https://discord.gg/5dAQEDJBs"
+"Data & Models" = "https://huggingface.co/Contrastive-LM"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+clm = ["py.typed", "static/*"]

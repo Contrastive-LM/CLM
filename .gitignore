@@ -1,0 +1,20 @@
+# API keys
+.env
+# Checkpoints and embedding stores (download from HF)
+checkpoints/
+data/
+*.pt
+*.pth
+# Python
+__pycache__/
+*.pyc
+# Local build / venv artefacts
+dist/
+build/
+*.egg-info/
+.venv*/
+logs/*.log
+# examples/t_rex/: answer caches, per-decision logs (results/*.json are committed)
+examples/t_rex/data/
+examples/t_rex/cache/
+examples/t_rex/artifacts/
