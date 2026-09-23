@@ -37,26 +37,27 @@ question: Choose the best safe action for the dinosaur.
 | survived 60 s (5 seeds) | **5/5** | **5/5** |
 | deaths | 0 | 0 |
 | best score (game distance meter; 697 = 60 s without a death) | 697.0 | 697.0 |
-| decisions per 60 s | 3361 | 1119 |
-| answers that were the planner's best move | 66.3% | 98.7% |
-| shield interventions per seed | 845, 917, 971, 1106, 1097 | 9, 6, 5, 6, 2 |
-| model latency p50 | 1.6 ms | 131.9 ms |
+| decisions per 60 s | 3342 | 1119 |
+| answers that were the planner's best move | 65.8% | 98.7% |
+| shield interventions per seed | 806, 893, 975, 1101, 1108 | 9, 6, 5, 6, 2 |
+| model latency p50 | 2.6 ms | 131.9 ms |
 | answer-to-effect latency p50 (request out to answer applied) | 16.5 ms | 149.8 ms |
 | failed calls | 0 | 0 |
 
 Both keep the dinosaur alive on every seed, but not equally on their own. Jev picked the planner's
 best move in 98.7% of its answers and the shield stepped in 28 times over five minutes of play;
-CLM agreed 66.3% of the time and the shield stepped in 4936 times. Asked offline about 859 distinct
+CLM agreed 65.8% of the time and the shield stepped in 4883 times. Asked offline about 859 distinct
 planner situations from a planner-driven game, CLM contradicts the labelled best move mostly when
 the right answer is *run* ("Safe. Waits; acts later. Best.": 250 of 709 such situations, 34 of them
 for an action labelled Unsafe), preferring an option whose description sounds like an action
 ("Clears the low bird", "Drops fast to land sooner") over the one marked *Best*; Jev reads the
-markers. CLM answers eight times faster: its server-side time is about 2 ms because a run's few
+markers. CLM answers eight times faster: its server-side time is about 3 ms because a run's few
 hundred distinct situations are soon all in `clm-serve`'s vector cache, so it got a turn every
-frame or two and Jev every three to six frames (3361 vs 1119 decisions a minute).
+frame or two and Jev every three to six frames (3342 vs 1119 decisions a minute).
 
-All runs on 2026-09-22 with `clm-latest` = `CLM_v0.1-8B.pt` (Qwen3-8B encoder on one L40S) and
-`jev-latest` (answered as `jev-1.13.0`). Latencies are client-side per request from the same host.
+CLM run on 2026-09-23 with `clm-latest` = `CLM_v0.1-8B.pt` (Qwen3-8B encoder on one RTX 4090);
+Jev run on 2026-09-22 with `jev-latest` (answered as `jev-1.13.0`). Latencies are client-side per
+request.
 
 **Reproduce.**
 
