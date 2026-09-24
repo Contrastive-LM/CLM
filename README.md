@@ -328,6 +328,10 @@ If you find CLM useful, please consider citing it:
 }
 ```
 
+## License
+
+The code in this repository is released under the [Apache 2.0 License](LICENSE). The CLM-8B weights are released under Apache 2.0 on [Hugging Face](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B).
+
 ---
 
 ## Directory Structure
