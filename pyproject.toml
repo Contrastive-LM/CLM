@@ -28,6 +28,8 @@ dependencies = [
     "uvicorn>=0.23",
     # the Qwen3-8B embedder (GPU)
     "vllm>=0.6",
+    # train/finetune.py: read the published Parquet embedding datasets
+    "pyarrow>=14",
 ]
 
 [project.optional-dependencies]
