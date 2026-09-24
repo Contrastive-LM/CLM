@@ -39,8 +39,7 @@ We invite the community to plug it into their own agents and benchmarks!
 ## Installation
 
 ```bash
-git clone https://github.com/Contrastive-LM/CLM.git && cd CLM
-pip install -r requirements.txt
+pip install "clm[serve,hf,vllm] @ https://github.com/Contrastive-LM/CLM/archive/refs/heads/main.zip"
 ```
 
 Requires Python 3.10+, Linux and an NVIDIA GPU. Installs everything, including PyTorch and vLLM.
