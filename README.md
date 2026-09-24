@@ -62,6 +62,10 @@ vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-mod
 clm-serve
 ```
 
+States longer than 2048 tokens are truncated. For longer states, raise both limits
+together, e.g. `--max-model-len 8192` on `vllm serve` and `clm-serve --max-tokens 8192`
+(needs more GPU memory).
+
 ### Ask typed questions about a state
 
 ```python
