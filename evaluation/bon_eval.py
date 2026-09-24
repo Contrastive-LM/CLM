@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Evaluate a CLM trajectory selector on any compatible best-of-N dataset.
 
-Every benchmark follows the same path: score each step with a CLM head, use the
-mean score over the final ``--window`` steps as the trajectory score, and
+Every benchmark follows the same path: score each step with a CLM head, aggregate
+the final ``--window`` step scores, and
 select the highest-scoring candidate. Candidate budget, inputs, checkpoints, and
 window are explicit command-line arguments; there are no benchmark profiles or
 expected-result constants. Exact score ties use uniform expectation and short
@@ -56,12 +56,16 @@ def step_scores(emb_dir, sh, ah, device, chunk=8192):
     return torch.cat(out), meta["samples"]
 
 
-def aggregate(scores, window):
-    """Use one benchmark-independent trajectory score: final-window mean."""
+def aggregate(scores, window, method):
+    """Aggregate the final-window step scores."""
     if not scores:
         raise ValueError("cannot aggregate an empty trajectory")
     tail = scores[-window:]
-    return sum(tail) / len(tail)
+    if method == "mean":
+        return sum(tail) / len(tail)
+    if method == "min":
+        return min(tail)
+    raise ValueError(f"unknown aggregation method: {method}")
 
 
 def best_of_n(candidates, n):
@@ -148,7 +152,9 @@ def main():
                          "tasks/heldout_tasks")
     ap.add_argument("--n", type=int, required=True, help="candidate budget per evaluation group")
     ap.add_argument("--window", type=int, default=12,
-                    help="number of final step scores included in the mean (default: 12)")
+                    help="number of final step scores to aggregate (default: 12)")
+    ap.add_argument("--aggregation", choices=("mean", "min"), required=True,
+                    help="aggregate final step scores by mean or minimum")
     ap.add_argument("--output")
     ap.add_argument("--gpu", type=int, default=0)
     args = ap.parse_args()
@@ -284,7 +290,7 @@ def main():
     res = {
         "n_tasks": n_tasks, "n_rollouts": n_roll,
         "N": args.n,
-        "aggregation": {"type": "final_window_mean", "window": args.window},
+        "aggregation": {"type": f"final_window_{args.aggregation}", "window": args.window},
         "instance_key": "(task, config)" if multi else "task",
         "n_configs": len({rows[tn]["config"] for tn in order if tn in rows}),
         "random_pick": random_rate, "oracle_any": oracle,
@@ -303,9 +309,10 @@ def main():
         sub = {t: v for t, v in by_task.items() if all(name in tr["scores"] for tr in v)}
         if not sub:
             continue
-        key = lambda trial, selector=name: aggregate(trial["scores"][selector], args.window)
+        key = lambda trial, selector=name: aggregate(
+            trial["scores"][selector], args.window, args.aggregation)
         rate, picks = selection_rate(sub, key, args.n)
-        label = f"{name}:last_{args.window}_mean"
+        label = f"{name}:last_{args.window}_{args.aggregation}"
         res["selectors"][label] = {"rate": rate, "n_tasks": len(sub),
                                     "resolved": round(rate * len(sub)), "picks": picks}
         print(f"[bon] {label} {rate:.3%} ({round(rate * len(sub))}/{len(sub)})", flush=True)
