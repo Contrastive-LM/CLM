@@ -155,6 +155,25 @@ a verifier for these long-horizon tasks, scoring below pass@1. With lightweight
 fine-tuning, CLM reaches SOTA on both (**81.6%** and **87.6%**) while running
 **4.1–5.7× faster than Jev**.
 
+### Typed decisions: CLM as a specialist
+
+Fine-tuned on the `train` split of
+[LocalLLaMA/typed-decisions](https://huggingface.co/datasets/LocalLLaMA/typed-decisions)
+(all four workflows) with bidirectional InfoNCE and scored on `test` (2,000
+decisions), CLM is the strongest specialist on the card:
+
+| Specialist | Accuracy ↑ | KL ↓ | Brier ↓ |
+|---|---|---|---|
+| **CLM-8B, fine-tuned (InfoNCE)** | **0.685 ± 0.001** | **0.177 ± 0.002** | ~0.127 ± <0.001 |
+| CLM-8B, fine-tuned (per-question softmax) | 0.660 ± 0.001 | 0.210 ± 0.002 | ~0.137 ± 0.001 |
+| ModernBERT-base (149M) | 0.646 | 0.223 | 0.119 |
+| MiniLM-L6 (22M) | 0.587 | 0.262 | 0.143 |
+
+<sub>Baselines from the dataset card. CLM: mean ± std over 3 seeds, frozen Qwen3-8B encoder,
+heads warm-started from CLM-v0.1-8B (command below). Brier is mean squared
+error against the one-hot gold label, which may differ from the card's
+definition.</sub>
+
 ---
 
 ## Fine-tuning CLM on Your Own Data
@@ -174,7 +193,7 @@ python train/finetune.py --task clm --hf-dataset Contrastive-LM/deepswe-clm-trai
     --init-ckpt ckpts/CLM_v0.1-8B.pt --out-dir runs/deepswe \
     --holdout-tasks heads/deepswe/heldout_tasks.json --batch 512 --seed 1234
 
-# typed decisions
+# typed decisions (bidirectional InfoNCE; --loss softce for a per-question softmax)
 python train/finetune.py --task choice --data LocalLLaMA/typed-decisions --workflow all \
     --init-ckpt ckpts/CLM_v0.1-8B.pt --out-dir runs/typed
 ```

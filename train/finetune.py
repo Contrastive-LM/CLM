@@ -7,9 +7,11 @@ Tasks (``--task``)
           ``--holdout-folds`` trains one head per fold and writes fold_spec.json
           for evaluation/bon_eval.py. ``--folds K --fold-index INDEX`` creates
           task-disjoint folds stratified by candidate/pass count before training.
-  choice  typed System One questions (LocalLLaMA/typed-decisions): softmax over each
-          question's candidates built by clm.schema.build_pairs, against the annotator
-          distribution (``--targets soft``) or the gold label (``hard``).
+  choice  typed System One questions (LocalLLaMA/typed-decisions), candidates built by
+          clm.schema.build_pairs. ``--loss infonce`` (default): bidirectional in-batch InfoNCE
+          over the batch's distinct option texts; ``softce``: softmax over each question's own
+          candidates. Both train against the annotator distribution (``--targets soft``) or the
+          gold label (``hard``); evaluation is always per question.
 
 Embeddings (clm)
   --emb-dir DIR        embedding dir (embed_shard.py + merge_embeddings.py output)
@@ -515,6 +517,37 @@ def run_choice(args) -> dict:
             return -(tgt * F.log_softmax(lg, -1)).sum(-1).mean()
         return F.cross_entropy(lg, lab)
 
+    if args.loss == "infonce":  # flat train set: every text once, options as indices into it
+        tr = ex["train"]
+        text_id = {t: i for i, t in enumerate(dict.fromkeys(t for e in tr for t in (e.state_text, *e.candidates)))}
+        emb = torch.tensor(np.stack([cache[t] for t in text_id]), dtype=torch.float32, device=device)
+        kmax = max(len(e.keys) for e in tr)
+        st_idx = torch.tensor([text_id[e.state_text] for e in tr], device=device)
+        opt_idx = torch.tensor([[text_id[t] for t in e.candidates] + [-1] * (kmax - len(e.keys)) for e in tr],
+                               device=device)
+        opt_tgt = torch.tensor([(e.target if args.targets == "soft" else
+                                 [float(i == e.label) for i in range(len(e.keys))]) + [0.0] * (kmax - len(e.keys))
+                                for e in tr], device=device)
+
+    def infonce_loss(idx):
+        """Bidirectional in-batch InfoNCE over the batch's distinct option texts: states -> options
+        against the gold distribution, options -> states against the states that hold them."""
+        oi, tg = opt_idx[idx], opt_tgt[idx]
+        valid = oi >= 0
+        pool, col = torch.unique(oi[valid], return_inverse=True)
+        cols = torch.zeros_like(oi)
+        cols[valid] = col
+        tgt = torch.zeros(len(idx), len(pool), device=device).scatter_add_(1, cols, tg * valid)
+        zq = F.normalize(sh(emb[st_idx[idx]]), dim=-1)
+        zc = F.normalize(ah(emb[pool]), dim=-1)
+        lg = logit_scale.exp().clamp(max=100.0) * zq @ zc.t()
+        fwd = -(tgt * F.log_softmax(lg, 1)).sum(1).mean()
+        w = tgt.t()
+        keep = w.sum(1) > 0
+        w = w[keep] / w[keep].sum(1, keepdim=True)
+        bwd = -(w * F.log_softmax(lg.t()[keep], 1)).sum(1).mean()
+        return (fwd + bwd) / 2
+
     @torch.no_grad()
     def evaluate(split):
         sh.eval(); ah.eval()
@@ -541,7 +574,9 @@ def run_choice(args) -> dict:
     params = list(sh.parameters()) + list(ah.parameters()) + [logit_scale]
     opt = torch.optim.AdamW(params, lr=args.lr or 5e-4, weight_decay=args.weight_decay)
     n_train = sum(len(b[3]) for b in data["train"])
-    steps = max(1, sum(math.ceil(len(b[3]) / args.batch) for b in data["train"])) * args.epochs
+    per_epoch = (math.ceil(n_train / args.batch) if args.loss == "infonce" else
+                 sum(math.ceil(len(b[3]) / args.batch) for b in data["train"]))
+    steps = max(1, per_epoch) * args.epochs
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args.lr or 5e-4, total_steps=steps,
                                                 pct_start=0.1, anneal_strategy="cos")
     base = {"majority_val": majority_baseline("val"), "majority_test": majority_baseline("test")}
@@ -553,7 +588,7 @@ def run_choice(args) -> dict:
         return {"state_head": sh.state_dict(), "action_head": ah.state_dict(),
                 "logit_scale": logit_scale.detach().cpu(),
                 "cfg": {**cfg, "projection_dim": proj, "hidden_size": HIDDEN, "task": "choice",
-                        "targets": args.targets, "data": args.data, "workflow": args.workflow,
+                        "targets": args.targets, "loss": args.loss, "data": args.data, "workflow": args.workflow,
                         "embed_model": args.embed_model, "max_len": args.max_len,
                         "init_ckpt": os.path.basename(args.init_ckpt) if args.init_ckpt else None},
                 "epoch": epoch, "metrics": metrics}
@@ -563,13 +598,19 @@ def run_choice(args) -> dict:
     torch.save(blob(0, m0["val"]), os.path.join(args.out_dir, "best_head.pt"))
     for ep in range(1, args.epochs + 1):
         tot = nb = 0
-        order = [(bi, idx) for bi, b in enumerate(data["train"])
-                 for idx in torch.randperm(len(b[3]), generator=g).split(args.batch)]
-        random.Random(args.seed + ep).shuffle(order)
+        if args.loss == "infonce":  # batches mix candidate counts, so draw from the flat set
+            order = [(None, idx) for idx in torch.randperm(len(st_idx), generator=g).split(args.batch)]
+        else:
+            order = [(bi, idx) for bi, b in enumerate(data["train"])
+                     for idx in torch.randperm(len(b[3]), generator=g).split(args.batch)]
+            random.Random(args.seed + ep).shuffle(order)
         for bi, idx in order:
-            q, c, tgt, lab, _ = data["train"][bi]
             idx = idx.to(device)
-            loss = loss_of(logits(q[idx], c[idx]), tgt[idx], lab[idx])
+            if args.loss == "infonce":
+                loss = infonce_loss(idx)
+            else:
+                q, c, tgt, lab, _ = data["train"][bi]
+                loss = loss_of(logits(q[idx], c[idx]), tgt[idx], lab[idx])
             opt.zero_grad(set_to_none=True); loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0); opt.step(); sched.step()
             tot += loss.item(); nb += 1
@@ -653,6 +694,9 @@ def main() -> None:
     ch = ap.add_argument_group("choice only")
     ch.add_argument("--targets", choices=["soft", "hard"], default="soft",
                     help="train on annotator distributions (soft) or gold labels (hard)")
+    ch.add_argument("--loss", choices=["infonce", "softce"], default="infonce",
+                    help="bidirectional in-batch InfoNCE over the batch's distinct option texts (infonce) "
+                         "or a softmax over each question's own options (softce)")
     args = ap.parse_args()
 
     if args.epochs < 1 or args.patience < 1:
