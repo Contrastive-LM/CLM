@@ -3,6 +3,7 @@
 # Checkpoints and embedding stores (download from HF)
 checkpoints/
 data/
+models/
 *.pt
 *.pth
 # Python

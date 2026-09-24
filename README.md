@@ -43,7 +43,10 @@ git clone https://github.com/Contrastive-LM/CLM.git && cd CLM
 pip install -r requirements.txt
 ```
 
-Requires Python 3.10+, Linux and an NVIDIA GPU. Installs everything, including PyTorch and vLLM.
+The default vLLM path requires Python 3.10+, Linux and an NVIDIA GPU. It
+installs everything, including PyTorch and vLLM.
+
+For the Apple Silicon encoder used with CLM on macOS, see [Mac setup](docs/MACOS.md).
 
 ---
 
