@@ -39,11 +39,14 @@ We invite the community to plug it into their own agents and benchmarks!
 ## Installation
 
 ```bash
-git clone https://github.com/Contrastive-LM/CLM.git && cd CLM
-pip install -r requirements.txt
+pip install contrastive-lm
 ```
 
-Requires Python 3.10+, Linux and an NVIDIA GPU. Installs everything, including PyTorch and vLLM.
+To install the latest from a clone:
+
+```bash
+pip install -e .
+```
 
 ---
 
@@ -52,12 +55,11 @@ Requires Python 3.10+, Linux and an NVIDIA GPU. Installs everything, including P
 ### Serve
 
 ```bash
-# 1. encoder: Qwen3-8B, last-token pooling (what the reference head was trained against)
-vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling \
-     --enable-prefix-caching --max-model-len 2048 --gpu-memory-utilization 0.35 --port 8090
+# 1. encoder (Qwen3-8B embeddings)
+vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --port 8090 &
 
-# 2. API — downloads the reference head (Contrastive-LM/CLM-v0.1-8B, 75 MB) on first run
-clm-serve --port 8700 --emb-url http://127.0.0.1:8090/v1/embeddings
+# 2. CLM API on :8700 (downloads the 75 MB reference head on first run)
+clm-serve
 ```
 
 ### Ask typed questions about a state

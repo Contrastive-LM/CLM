@@ -1,5 +1,5 @@
-# Local install from a clone (CLM is not on PyPI):
+# Local install from a clone (or `pip install contrastive-lm` from PyPI):
 #   python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 # Assumes nothing is preinstalled: pulls in torch and vLLM (Linux + NVIDIA GPU).
--e .[serve,vllm]
+-e .
 httpx>=0.25   # examples/t_rex: persistent HTTP client for the real-time player
