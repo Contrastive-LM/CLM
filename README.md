@@ -171,14 +171,12 @@ python evaluation/bon_eval.py --hf-dataset Contrastive-LM/deepswe-clm-embeddings
     --tasks-file heads/deepswe/heldout_tasks.json --n 4 --window 12
 
 # fine-tune the matching DeepSWE head
-hf download Contrastive-LM/CLM-v0.1-8B CLM_v0.1-8B.pt --local-dir ckpts
-python train/finetune.py --task clm --hf-dataset Contrastive-LM/deepswe-clm-train-embeddings-8k \
-    --init-ckpt ckpts/CLM_v0.1-8B.pt --out-dir runs/deepswe \
-    --holdout-tasks heads/deepswe/heldout_tasks.json --batch 512 --seed 1234
+python train/finetune.py --task clm --init-ckpt "$(clm-download)" --out-dir runs/deepswe \
+    --holdout-tasks heads/deepswe/heldout_tasks.json --batch 512
 
 # typed decisions
 python train/finetune.py --task choice --data LocalLLaMA/typed-decisions --workflow all \
-    --init-ckpt ckpts/CLM_v0.1-8B.pt --out-dir runs/typed
+    --init-ckpt "$(clm-download)" --out-dir runs/typed
 ```
 
 ---
