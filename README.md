@@ -56,7 +56,7 @@ pip install -e .
 
 ```bash
 # 1. encoder (Qwen3-8B embeddings)
-vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --port 8090 &
+vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-model-len 2048 --port 8090 &
 
 # 2. CLM API on :8700 (downloads the 75 MB reference head on first run)
 clm-serve
