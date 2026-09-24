@@ -489,7 +489,8 @@ const HINTS = {
         'The server rejected the request. The JSON tab shows exactly what was sent.'],
   502: ['Encoder unreachable',
         'clm-serve is up, but it cannot reach the <code>/v1/embeddings</code> backend that does the embedding. ' +
-        'Start the encoder and point <code>--emb-url</code> at it:' +
+        'Start the encoder and point <code>--emb-url</code> at it. ' +
+        'Apple Silicon / MPS: <code>clm-mps-embed --port 8090</code>. Linux / NVIDIA:' +
         '<pre class="cmd">vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling \\\n     --enable-prefix-caching --max-model-len 2048 --gpu-memory-utilization 0.35 --port 8090</pre>'],
 };
 

@@ -45,8 +45,35 @@ pip install contrastive-lm
 To install the latest from a clone:
 
 ```bash
+git clone https://github.com/Contrastive-LM/CLM.git && cd CLM
 pip install -e .
 ```
+
+### Apple Silicon / MPS
+
+On an Apple Silicon Mac, install the PyTorch MPS encoder from a clone:
+
+```bash
+git clone https://github.com/Contrastive-LM/CLM.git && cd CLM
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-macos.txt
+```
+
+Start the encoder and API in separate terminals, with `.venv` active in each:
+
+```bash
+clm-mps-embed --port 8090
+```
+
+```bash
+clm-serve --device mps --port 8700 --emb-url http://127.0.0.1:8090/v1/embeddings
+```
+
+The first launch downloads `Qwen/Qwen3-8B` (about 16 GB) and the CLM head
+(about 75 MB). The encoder uses BF16 on supported Macs and FP16 otherwise.
+The vector cache is off by default on MPS to leave memory for the encoder;
+`--action-cache` and `--batch-size` remain available to tune larger Macs.
 
 ---
 
@@ -421,15 +448,15 @@ files only; every API route above shadows it.
 
 ```
 clm-serve [--port 8700] [--emb-url http://127.0.0.1:8090/v1/embeddings] [--emb-model qwen3-8b]
-          [--max-tokens 2048] [--ckpt PATH] [--ckpt-dir DIR] [--model NAME=PATH ...] [--device cpu|cuda]
+          [--max-tokens 2048] [--ckpt PATH] [--ckpt-dir DIR] [--model NAME=PATH ...] [--device cpu|cuda|mps]
           [--action-cache 0.02|512MiB|0] [--no-ui] [--cors]
 ```
 
 `--ckpt PATH` serves your own head as `clm-latest` (default: the reference
 head in `~/.cache/clm/`, downloaded if missing); `--ckpt-dir DIR` serves every
 `*.pt` there under its file stem; `--model NAME=PATH` adds one more.
-The heads run on the GPU when torch sees one, else on the CPU; `--device` (or
-`CLM_DEVICE`) forces one. Checkpoints hot-reload when the file changes. Set `CLM_API_KEY` to require
+The heads use CUDA when available, else CPU. Select MPS with `--device mps` or
+`CLM_DEVICE=mps`. Checkpoints hot-reload when the file changes. Set `CLM_API_KEY` to require
 `Authorization: Bearer <key>` (the playground has a field for it). Environment
 equivalents: `CLM_PORT`, `CLM_EMB_URL`, `CLM_EMB_MODEL`, `CLM_CKPT`,
 `CLM_DEVICE`, `CLM_ACTION_CACHE`.
