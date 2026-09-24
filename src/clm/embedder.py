@@ -40,7 +40,10 @@ class Embedder:
     def _fetch(self, texts: list[str]) -> tuple[list[np.ndarray], int]:
         body: dict[str, Any] = {"model": self.model, "input": texts, "encoding_format": "base64"}
         if self.max_tokens:
+            # Keep the tail, as the training recipe does: the question sits at the end of a
+            # state text. vLLM's pooling runner cuts from the right by default since 0.13.
             body["truncate_prompt_tokens"] = self.max_tokens
+            body["truncation_side"] = "left"
         try:
             r = self.session.post(self.url, json=body, timeout=self.timeout)
         except requests.RequestException as e:
