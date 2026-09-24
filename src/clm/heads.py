@@ -1,6 +1,6 @@
 """Projection heads: architecture, checkpoint loading and download.
 
-A CLM checkpoint (as trained in the contrastive_learning repo) is a ``torch.save``
+A CLM checkpoint (as trained by ``train/finetune.py``) is a ``torch.save``
 dict with ``state_head`` / ``action_head`` state dicts, ``logit_scale`` (log of
 the InfoNCE temperature inverse) and ``cfg`` (``width``, ``depth``, optional
 ``projection_dim``, ``activation``, ``layernorm``, ``residual``).  Each head maps
@@ -137,6 +137,7 @@ def download(repo: str = HF_REPO, filename: str = HF_FILE, dest_dir: str = DEFAU
     dest = os.path.join(dest_dir, filename)
     if os.path.exists(dest) and not force:
         return dest
+    _count_download(repo)
     try:
         from huggingface_hub import hf_hub_download
         return hf_hub_download(repo, filename, local_dir=dest_dir, force_download=force)
@@ -151,6 +152,16 @@ def download(repo: str = HF_REPO, filename: str = HF_FILE, dest_dir: str = DEFAU
                     f.write(chunk)
         os.replace(tmp, dest)
         return dest
+
+
+def _count_download(repo: str) -> None:
+    """The Hub counts a model download per request to the repo's ``config.json``
+    (https://huggingface.co/docs/hub/models-download-stats); best-effort, never fails."""
+    try:
+        import requests
+        requests.head(f"https://huggingface.co/{repo}/resolve/main/config.json", timeout=5)
+    except Exception:
+        pass
 
 
 def default_checkpoint() -> str | None:
