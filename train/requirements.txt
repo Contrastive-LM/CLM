@@ -1,0 +1,8 @@
+transformers>=4.51.0
+torch>=2.0.0
+numpy>=1.24.0
+pyarrow>=14.0.0
+huggingface_hub>=0.20.0
+
+# Optional: embedding from scratch
+# vllm>=0.6
