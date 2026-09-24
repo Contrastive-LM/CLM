@@ -17,6 +17,7 @@ import os
 from typing import Any
 
 from .cache import CacheDisabled, VectorArena
+from .client import question_to_dict
 from .embedder import Embedder
 from .heads import HIDDEN, HeadPair, default_checkpoint, default_device
 from .schema import answer_from_logits, build_pairs
@@ -113,6 +114,7 @@ class Engine:
             head = self.heads[model].ensure()
         else:
             raise ModelNotFound(f"unknown model {model!r}; available: {[m['name'] for m in self.models()]}")
+        questions = {k: question_to_dict(q) for k, q in questions.items()}   # Noul/Choice/Score or dicts
         pairs = build_pairs(state, questions)          # ValueError on malformed questions
         states = [p[0] for p in pairs.values()]
         cands = [t for p in pairs.values() for t in p[2]]
