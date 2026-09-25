@@ -9,10 +9,13 @@ a 4096-d encoder embedding to a ``projection_dim``-d vector; the score of a
 
 The reference head lives at https://huggingface.co/Contrastive-LM/CLM-v0.1-8B
 (``CLM_v0.1-8B.pt``, trained against Qwen3-8B last-token pooling).
+
+On Apple Silicon, ``device="mlx"`` runs the same MLP on Metal via MLX.
 """
 from __future__ import annotations
 
 import os
+import platform
 import threading
 from typing import Any
 
@@ -25,17 +28,30 @@ HF_FILE = "CLM_v0.1-8B.pt"
 DEFAULT_CKPT_DIR = os.environ.get("CLM_CKPT_DIR", os.path.join(os.path.expanduser("~"), ".cache", "clm"))
 
 
+def _mlx_available() -> bool:
+    try:
+        import mlx.core  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def default_device() -> str:
-    """``CLM_DEVICE`` if set, else the GPU when torch sees one (the heads are tiny but the
-    projection then runs next to the encoder instead of copying embeddings back to host)."""
+    """``CLM_DEVICE`` if set; else ``mlx`` on Darwin when MLX is installed, else CUDA/CPU."""
     d = os.environ.get("CLM_DEVICE")
     if d:
         return d
+    if platform.system() == "Darwin" and _mlx_available():
+        return "mlx"
     try:
         import torch
         return "cuda" if torch.cuda.is_available() else "cpu"
     except ImportError:
         return "cpu"
+
+
+def is_mlx(device: str | None) -> bool:
+    return (device or "").split(":")[0] == "mlx"
 
 
 def make_head(width: int, depth: int = 2, proj: int = PROJ_DIM, activation: str = "gelu",
@@ -77,22 +93,31 @@ class HeadPair:
         self.scale = 1.0
         self.cfg: dict[str, Any] = {}
         self._lock = threading.Lock()
+        self._backend = "mlx" if is_mlx(self.device) else "torch"
 
     def _load(self) -> None:
         import torch
-        ck = torch.load(self.path, map_location="cpu")
+        ck = torch.load(self.path, map_location="cpu", weights_only=False)
         cfg = dict(ck["cfg"])
         kw = dict(width=cfg["width"], depth=cfg["depth"],
                   proj=ck.get("projection_dim", cfg.get("projection_dim", PROJ_DIM)),
                   activation=cfg.get("activation", "gelu"), layernorm=cfg.get("layernorm", False),
                   residual=cfg.get("residual", False), hidden=cfg.get("hidden_size", HIDDEN))
-        sh, ah = make_head(**kw), make_head(**kw)
-        sh.load_state_dict(ck["state_head"]); ah.load_state_dict(ck["action_head"])
-        sh.eval().to(self.device); ah.eval().to(self.device)
+        scale = float(torch.as_tensor(ck["logit_scale"]).float().exp().clamp(max=100.0))
+        if self._backend == "mlx":
+            from .mlx_heads import load_state_dict_mlx, make_head_mlx
+            sh, ah = make_head_mlx(**kw), make_head_mlx(**kw)
+            load_state_dict_mlx(sh, ck["state_head"])
+            load_state_dict_mlx(ah, ck["action_head"])
+            sh.eval(); ah.eval()
+        else:
+            sh, ah = make_head(**kw), make_head(**kw)
+            sh.load_state_dict(ck["state_head"]); ah.load_state_dict(ck["action_head"])
+            sh.eval().to(self.device); ah.eval().to(self.device)
         self.state_head, self.action_head, self.cfg = sh, ah, cfg
         self.generation += 1
         self.proj_dim = kw["proj"]
-        self.scale = float(torch.as_tensor(ck["logit_scale"]).float().exp().clamp(max=100.0))
+        self.scale = scale
 
     def ensure(self) -> "HeadPair":
         with self._lock:
@@ -101,22 +126,28 @@ class HeadPair:
                 self._load(); self.mtime = m
         return self
 
-    def _project(self, head, x: np.ndarray):
+    def _project(self, which: str, x: np.ndarray):
         """-> [n, proj] L2-normalised projections, left on ``self.device``."""
-        import torch
         self.ensure()
+        head = self.state_head if which == "state" else self.action_head
+        if self._backend == "mlx":
+            from .mlx_heads import project_mlx
+            return project_mlx(head, x)
+        import torch
         with torch.no_grad():
             return torch.nn.functional.normalize(head(torch.from_numpy(x).to(self.device)), dim=-1)
 
     def project_states(self, states: np.ndarray):
-        return self._project(self.state_head, states)
+        return self._project("state", states)
 
     def project_actions(self, candidates: np.ndarray):
-        return self._project(self.action_head, candidates)
+        return self._project("action", candidates)
 
     def project(self, states: np.ndarray, candidates: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """L2-normalised projections of [n, HIDDEN] state and candidate embeddings."""
         zs, zc = self.project_states(states), self.project_actions(candidates)
+        if self._backend == "mlx":
+            return np.array(zs, dtype=np.float32), np.array(zc, dtype=np.float32)
         return zs.cpu().numpy(), zc.cpu().numpy()
 
     @property
@@ -127,6 +158,9 @@ class HeadPair:
     @property
     def n_params(self) -> int:
         self.ensure()
+        if self._backend == "mlx":
+            from .mlx_heads import n_params_mlx
+            return n_params_mlx(self.state_head) + n_params_mlx(self.action_head)
         return sum(p.numel() for h in (self.state_head, self.action_head) for p in h.parameters())
 
 

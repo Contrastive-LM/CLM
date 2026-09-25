@@ -16,10 +16,12 @@ import glob
 import os
 from typing import Any
 
+import numpy as np
+
 from .cache import CacheDisabled, VectorArena
 from .client import question_to_dict
 from .embedder import Embedder
-from .heads import HIDDEN, HeadPair, default_checkpoint, default_device
+from .heads import HIDDEN, HeadPair, default_checkpoint, default_device, is_mlx
 from .schema import answer_from_logits, build_pairs
 
 DEFAULT_MODEL = "clm-latest"
@@ -84,8 +86,21 @@ class Engine:
         return self.arena.get(namespace, dim, texts, compute)
 
     def _to_device(self, x):
+        if is_mlx(self.device):
+            import mlx.core as mx
+            arr = mx.array(np.asarray(x, dtype=np.float32))
+            mx.eval(arr)
+            return arr
         import torch
         return torch.from_numpy(x).to(self.device)
+
+    @staticmethod
+    def _logits_list(scale: float, cos, temperature: float) -> list[float]:
+        """Device-agnostic ``(scale * cos / temperature).tolist()``."""
+        if hasattr(cos, "tolist"):
+            scaled = scale * cos / temperature
+            return [float(v) for v in scaled.tolist()]
+        return [float(scale * float(c) / temperature) for c in cos]
 
     # ------------------------------------------------------------------ models
     def models(self) -> list[dict[str, str]]:
@@ -133,7 +148,8 @@ class Engine:
         for i, (qid, (_, keys, texts)) in enumerate(pairs.items()):
             cos = za[k:k + len(texts)] @ zq[i]
             k += len(texts)
-            answers[qid] = answer_from_logits(questions[qid], keys, (scale * cos / temperature).tolist())
+            answers[qid] = answer_from_logits(questions[qid], keys,
+                                              self._logits_list(scale, cos, temperature))
         return {"model": model, "answers": answers,
                 "usage": {"billing_units": len(questions), "input_tokens": sum(tokens), "output_tokens": 0}}
 
