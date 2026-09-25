@@ -28,7 +28,7 @@ from clm.heads import HIDDEN, make_head  # noqa: E402  (released checkpoint arch
 
 
 def load_heads(path, device):
-    ck = torch.load(path, map_location="cpu", weights_only=False)
+    ck = torch.load(path, map_location="cpu", weights_only=True)
     cfg = ck.get("cfg", {})
     w = cfg.get("width", 1536); d = cfg.get("depth", 3)
     hk = dict(activation=cfg.get("activation", "gelu"),
@@ -45,8 +45,8 @@ def load_heads(path, device):
 
 @torch.no_grad()
 def step_scores(emb_dir, sh, ah, device, chunk=8192):
-    se = torch.load(os.path.join(emb_dir, "state_embeddings.pt"), map_location="cpu")
-    ae = torch.load(os.path.join(emb_dir, "action_embeddings.pt"), map_location="cpu")
+    se = torch.load(os.path.join(emb_dir, "state_embeddings.pt"), map_location="cpu", weights_only=True)
+    ae = torch.load(os.path.join(emb_dir, "action_embeddings.pt"), map_location="cpu", weights_only=True)
     meta = json.load(open(os.path.join(emb_dir, "metadata.json")))
     out = []
     for i in range(0, len(se), chunk):
