@@ -141,8 +141,8 @@ def export(emb_dir: str, out_dir: str, shards: int = 8, dtype: str = "float16") 
     import torch
 
     samples = json.load(open(os.path.join(emb_dir, "metadata.json")))["samples"]
-    se = torch.load(os.path.join(emb_dir, "state_embeddings.pt"), map_location="cpu", mmap=True)
-    ae = torch.load(os.path.join(emb_dir, "action_embeddings.pt"), map_location="cpu", mmap=True)
+    se = torch.load(os.path.join(emb_dir, "state_embeddings.pt"), map_location="cpu", weights_only=True, mmap=True)
+    ae = torch.load(os.path.join(emb_dir, "action_embeddings.pt"), map_location="cpu", weights_only=True, mmap=True)
     n, dim = se.shape
     if not (len(ae) == len(samples) == n):
         raise ValueError(f"{emb_dir}: {n} states, {len(ae)} actions, {len(samples)} samples")
