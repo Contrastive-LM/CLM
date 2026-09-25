@@ -23,6 +23,11 @@ python -m pip install mlx==0.32.2 safetensors==0.8.0
 python -m pip install 'mlx-lm @ git+https://github.com/ml-explore/mlx-lm.git@47e43a4526d42a6dcee758f07eb04b78a8439ecb'
 ```
 
+If the checkout is in an iCloud-managed `Documents` folder, put the virtual
+environment in a local directory such as `~/.local/share/clm-mac/venv` instead
+of `.venv`. macOS can evict dependency files from `Documents`; this makes the
+first PyTorch and Transformers imports unexpectedly slow.
+
 Those MLX versions are the versions used for the working local setup. The FP8
 conversion also uses PyTorch, supplied by CLM's `serve` extra.
 
@@ -69,6 +74,52 @@ curl -fsS http://127.0.0.1:8091/v1/embeddings \
 `clm-serve` downloads the reference projection head if it is not already
 cached. The encoder and API are local to the Mac by default; neither command
 configures them to start after a reboot.
+
+## Local latency benchmark
+
+On a MacBook Pro `Mac16,8` (Apple M4 Pro, 14 CPU cores, 48 GB unified memory;
+macOS 26.5.2), the local API returned these timings on 2026-09-25:
+
+| Cache condition | n | Server median | Server p95 | Local wall median | Local wall p95 | Median encoder tokens |
+|---|---:|---:|---:|---:|---:|---:|
+| First request after API cache reset | 1 | 424.8 ms | — | 425.6 ms | — | 46 |
+| New state and new choices | 30 | 418.0 ms | 425.2 ms | 418.5 ms | 425.7 ms | 103 |
+| New state, fixed choices | 30 | 161.6 ms | 168.8 ms | 162.1 ms | 169.3 ms | 37 |
+| Identical cached request | 30 | 0.1 ms | 0.1 ms | 0.3 ms | 0.4 ms | 0 |
+
+The encoder was already loaded on `127.0.0.1:8091`. A separate API process on
+`127.0.0.1:8702` started with an empty vector cache and the reference
+`CLM_v0.1-8B.pt` projection head on CPU. Requests were sequential over
+localhost, using `clm-latest`, one choice question, three short department
+criteria, and the default 2,048-token embedding limit. The benchmark gives
+each new state and choice a unique case ID, then reuses the fixed choices, then
+repeats an identical request. The API's `X-CLM-Latency-Ms` header is server
+time; local wall time includes the HTTP round trip. Encoder token counts
+confirm that the first two 30-request phases were misses and the identical
+repeats were cache hits.
+
+The encoder used `Qwen/Qwen3-8B-FP8` at Hugging Face revision
+`220b46e3b2180893580a4454f21f22d3ebb187d3`, converted to MLX MXFP8 E4M3
+with 32-element groups by `tools/convert_qwen_fp8_to_mlx.py`. Versions were
+MLX 0.32.2, MLX-LM `0.31.4.dev129+g47e43a452`, Transformers 5.17.0, and
+CLM 0.1.0. The local head file's SHA-256 was
+`b2b4a8c9c2d39263eff78a351eb909a342ce9b3bf21a3f07c1d1bf15f1c4eda5`.
+These are short classification requests, not long agent traces or a comparison
+with another GPU. See the [raw samples](benchmarks/m4-pro-macos-2026-09-25.json).
+
+To repeat the measurement, keep the encoder running, start a fresh API on
+port 8702 with the same head, then run:
+
+```bash
+clm-serve --host 127.0.0.1 --port 8702 --device cpu \
+  --ckpt /path/to/CLM_v0.1-8B.pt \
+  --emb-url http://127.0.0.1:8091/v1/embeddings --emb-model qwen3-8b
+python tools/benchmark_clm_api.py http://127.0.0.1:8702 \
+  --samples 30 --json-out benchmark.json
+```
+
+Run the two commands in separate terminals. The benchmark refuses an API
+whose vector cache is already used.
 
 ## Limits
 
