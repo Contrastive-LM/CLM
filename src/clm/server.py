@@ -1,7 +1,9 @@
 """CLM System One API server (FastAPI).
 
     clm-serve --port 8700 --emb-url http://127.0.0.1:8090/v1/embeddings
-    export CLM_API_KEY=...      # optional; then requests need "Authorization: Bearer <key>"
+    export CLM_API_KEY=...      # required once this server is reachable from another machine
+                                # (a non-loopback --host, or --cors); requests then need
+                                # "Authorization: Bearer <key>"
 
     POST /v1/systemone   {"state": ..., "model": "clm-latest", "questions": {id: Question},
                           "temperature": 1.0}          -> {"model", "answers": {id: Answer}, "usage"}
@@ -19,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import ipaddress
 import os
 import time
 
@@ -164,9 +167,29 @@ def create_app(engine: Engine, api_key: str | None = None, ui: bool = True, cors
     return app
 
 
+def is_loopback(host: str) -> bool:
+    """Whether ``host`` is reachable from this machine only.
+
+    ``localhost`` and the loopback IPs are; ``0.0.0.0`` and ``::`` — every
+    interface, which is how uvicorn reads them — are not, and neither is a
+    hostname or an empty string, which resolves to this machine's own addresses.
+    The caller only uses this to decide whether an API key is mandatory, so
+    anything we cannot parse without network I/O counts as reachable.
+    """
+    host = (host or "").strip().strip("[]").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--host", default="0.0.0.0")
+    ap.add_argument("--host", default=os.environ.get("CLM_HOST", "127.0.0.1"),
+                    help="interface to bind (0.0.0.0 for every one); the default serves this machine "
+                         "only, so the API is not reachable from the network.  Environment: CLM_HOST")
     ap.add_argument("--port", type=int, default=int(os.environ.get("CLM_PORT", 8700)))
     ap.add_argument("--emb-url", default=os.environ.get("CLM_EMB_URL", "http://127.0.0.1:8090/v1/embeddings"))
     ap.add_argument("--emb-model", default=os.environ.get("CLM_EMB_MODEL", "qwen3-8b"))
@@ -187,7 +210,21 @@ def main() -> None:
     ap.add_argument("--cors", action="store_true",
                     help="allow browser requests from any origin (needed to drive this server from a "
                          "playground served elsewhere)")
+    ap.add_argument("--allow-anonymous", action="store_true",
+                    help="serve without CLM_API_KEY even though the server is reachable beyond this "
+                         "machine (a non-loopback --host, or --cors)")
     args = ap.parse_args()
+
+    api_key = os.environ.get("CLM_API_KEY")
+    exposed = args.cors or not is_loopback(args.host)
+    if exposed and not api_key:
+        if not args.allow_anonymous:
+            raise SystemExit(
+                f"refusing to serve: --host {args.host} / --cors makes this server reachable from other "
+                "machines, and CLM_API_KEY is not set, so anyone who can reach the port can call the "
+                "model.  Set CLM_API_KEY=... (clients then send \"Authorization: Bearer <key>\"), or "
+                "pass --allow-anonymous if that exposure is intended.")
+        print("[clm] warning: no CLM_API_KEY; serving anonymously on a reachable interface", flush=True)
 
     from .embedder import Embedder
     ckpt = args.ckpt
@@ -205,7 +242,6 @@ def main() -> None:
                     action_cache=args.action_cache)
     if not engine.heads and not extra:
         raise SystemExit("no checkpoint: pass --ckpt or let clm-serve download the reference head")
-    api_key = os.environ.get("CLM_API_KEY")
     app = create_app(engine, api_key, ui=not args.no_ui, cors=args.cors)
     print(f"[clm] models {[m['name'] for m in engine.models()]} on {device}", flush=True)
     print(f"[clm] embedder {args.emb_url} ({args.emb_model}) {'up' if engine.embedder.healthy() else 'NOT REACHABLE'}; "
