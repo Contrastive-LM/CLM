@@ -32,10 +32,8 @@ python train/finetune.py ... --out-dir runs/<tag>/<commit> > run.log 2>&1
 For `clm`, run the agreed held-out evaluation afterward:
 
 ```bash
-python evaluation/bon_eval.py ... --n <N> --window <K> --aggregation mean >> run.log 2>&1
+python evaluation/bon_eval.py ... --n <N> --window <K> >> run.log 2>&1
 ```
-
-Select `mean` or `min` before the experiment. Keep that choice fixed across runs.
 
 **You may:**
 
@@ -46,8 +44,8 @@ Select `mean` or `min` before the experiment. Keep that choice fixed across runs
 **You may not:**
 
 - Modify any other file.
-- Change the data, embeddings, splits, folds, evaluation set, `--n`,
-  `--window`, or `--aggregation`.
+- Change the data, embeddings, splits, folds, evaluation set, `--n`, or
+  `--window`.
 - Install dependencies.
 - Train on evaluation data or tune on the `choice` test split.
 

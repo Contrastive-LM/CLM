@@ -167,15 +167,15 @@ fine-tuning, CLM reaches SOTA on both (**81.6%** and **87.6%**) while running
 
 See [docs/FINETUNING.md](docs/FINETUNING.md).
 
-The [Harvey projection head](examples/harvey/README.md) includes its training
-recipe, checkpoint, and held-out selection results.
+The [Harvey LAB example](examples/harvey/README.md) documents CLM fine-tuning
+on Parthenon and CAFL agent traces, with its training recipe and selection results.
 
 ```bash
 # reproduce the task-disjoint DeepSWE heldout-38 result (31/38 = 81.6%)
 hf download Contrastive-LM/deepswe-clm-heads-8k --local-dir heads/deepswe
 python evaluation/bon_eval.py --hf-dataset Contrastive-LM/deepswe-clm-embeddings-8k \
     --checkpoint heads/deepswe/best_head.pt \
-    --tasks-file heads/deepswe/heldout_tasks.json --n 4 --window 12 --aggregation mean
+    --tasks-file heads/deepswe/heldout_tasks.json --n 4 --window 12
 
 # fine-tune the matching DeepSWE head
 python train/finetune.py --task clm --init-ckpt "$(clm-download)" --out-dir runs/deepswe \
