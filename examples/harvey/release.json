@@ -1,0 +1,10 @@
+{
+  "dataset": {
+    "repo": "AbeHou/harvey-clm-data",
+    "revision": "eb6a3fa89d30c1a472001a3f2f5642f44b788098"
+  },
+  "model": {
+    "repo": "AbeHou/harvey-clm-head",
+    "revision": "1b1a0dcc698994db7be0960e3ca224a02f5ea8e0"
+  }
+}

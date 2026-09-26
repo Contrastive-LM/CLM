@@ -1,0 +1,31 @@
+diff --git a/train/finetune.py b/train/finetune.py
+index 7de22f1..c6582eb 100644
+--- a/train/finetune.py
++++ b/train/finetune.py
+@@ -174,7 +174,7 @@ def _load_clm_data(path, device, keep_tasks=None):
+ def _clm_loss(state_head, action_head, logit_scale, states, actions, codes):
+     state_z = F.normalize(state_head(states), dim=-1)
+     action_z = F.normalize(action_head(actions), dim=-1)
+-    logits = logit_scale.exp().clamp(max=100.0) * state_z @ action_z.t()
++    logits = logit_scale.exp() * state_z @ action_z.t()
+     labels = torch.arange(len(states), device=states.device)
+     same = codes.unsqueeze(0) == codes.unsqueeze(1)
+     same.fill_diagonal_(False)
+@@ -294,7 +294,7 @@ def _train_clm(args, emb_dir, out_dir, holdout_path):
+             logit_scale.copy_(torch.as_tensor(checkpoint["logit_scale"]).to(device))
+
+     params = list(state_head.parameters()) + list(action_head.parameters()) + [logit_scale]
+-    lr = args.lr or 2e-3 * math.sqrt(1024 / width) * math.sqrt(args.batch / 1024)
++    lr = args.lr or (1e-3 if checkpoint else 2e-3) * math.sqrt(1024 / width) * math.sqrt(args.batch / 1024)
+     optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=args.weight_decay)
+     generator = torch.Generator().manual_seed(args.seed)
+     initial_batches = _clm_batches(len(train[0]), args.batch, args.sampler, train[3],
+@@ -337,6 +337,8 @@ def _train_clm(args, emb_dir, out_dir, holdout_path):
+             loss.backward()
+             torch.nn.utils.clip_grad_norm_(params, 1.0)
+             optimizer.step()
++            with torch.no_grad():
++                logit_scale.clamp_(max=math.log(100.0))
+             if scheduler_steps < total_steps:
+                 scheduler.step()
+                 scheduler_steps += 1
