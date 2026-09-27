@@ -80,6 +80,10 @@ llama-server -hf unsloth/Qwen3-8B-GGUF:BF16 --alias qwen3-8b --embedding --pooli
 clm-serve --emb-model qwen3-8b   # CLM_DEVICE=mps is picked automatically when torch sees MPS
 ```
 
+States longer than 2048 tokens are truncated. For longer states, raise both limits
+together, e.g. `-c 8192` on `llama-server` and `clm-serve --max-tokens 8192`
+(needs more unified memory for the KV cache).
+
 ### Running on Apple Silicon
 
 - `vllm` is dropped from `pip install -e .` on any non-Linux platform (`pyproject.toml`
