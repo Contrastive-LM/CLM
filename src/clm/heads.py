@@ -26,14 +26,19 @@ DEFAULT_CKPT_DIR = os.environ.get("CLM_CKPT_DIR", os.path.join(os.path.expanduse
 
 
 def default_device() -> str:
-    """``CLM_DEVICE`` if set, else the GPU when torch sees one (the heads are tiny but the
-    projection then runs next to the encoder instead of copying embeddings back to host)."""
+    """``CLM_DEVICE`` if set, else the GPU when torch sees one -- CUDA, then Apple Silicon's MPS
+    (the heads are tiny but the projection then runs next to the encoder instead of copying
+    embeddings back to host)."""
     d = os.environ.get("CLM_DEVICE")
     if d:
         return d
     try:
         import torch
-        return "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            return "cuda"
+        if torch.backends.mps.is_available():
+            return "mps"
+        return "cpu"
     except ImportError:
         return "cpu"
 
