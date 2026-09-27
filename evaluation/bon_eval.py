@@ -24,7 +24,13 @@ REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(REPO, "src"))
 sys.path.insert(0, os.path.join(REPO, "preprocessing"))
 import hf_embeddings  # noqa: E402
-from clm.heads import HIDDEN, make_head  # noqa: E402  (released checkpoint architecture)
+from clm.heads import HIDDEN, default_device, make_head  # noqa: E402  (released checkpoint architecture)
+
+
+def _device(gpu: int) -> torch.device:
+    """``cuda:<gpu>`` when CUDA is available, else whatever ``default_device()`` picks
+    (MPS on Apple Silicon, else CPU)."""
+    return torch.device(f"cuda:{gpu}") if torch.cuda.is_available() else torch.device(default_device())
 
 
 def load_heads(path, device):
@@ -158,7 +164,7 @@ def main():
     if args.window < 1:
         ap.error("--window must be positive")
 
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
+    device = _device(args.gpu)
     if args.hf_dataset:
         slug = "".join(c if c.isalnum() or c in "._-" else "_" for c in args.hf_dataset)
         args.embeddings_dir = hf_embeddings.download(

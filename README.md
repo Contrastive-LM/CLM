@@ -380,7 +380,7 @@ The code in this repository is released under the [Apache 2.0 License](LICENSE).
 ```
 .
 ├── pyproject.toml               # the clm package (installed editable by requirements.txt)
-├── serve_qwen3_8b.sh            # launch the Qwen3-8B pooling encoder on a GPU
+├── serve_qwen3_8b.sh            # launch the Qwen3-8B encoder: vllm serve, or llama-server on Apple Silicon
 ├── download_head.sh             # fetch the released head (`clm-download` does the same)
 ├── assets/                      # logo + the playground screenshot used above
 ├── src/clm/                     # inference: the package `clm-serve` and `clm` ship
