@@ -64,6 +64,10 @@ class Pool:
         self.hits = self.misses = self.evictions = 0
 
     def claim(self, key: str) -> int:
+        slot = self.slots.get(key)
+        if slot is not None:                             # a concurrent miss filled it first
+            self.slots.move_to_end(key)
+            return slot
         if self.free:
             slot = self.free.pop()
         else:
