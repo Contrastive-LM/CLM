@@ -3,7 +3,7 @@
 # Preflights unified-memory pressure so we do not jetsam mid-download next to a
 # resident 30B+ Metal server.
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 MODEL="${CLM_MLX_MODEL:-mlx-community/Qwen3-8B-4bit}"
