@@ -31,6 +31,16 @@ def l2_np(x: np.ndarray, axis: int = -1) -> np.ndarray:
     return x / (np.linalg.norm(x, axis=axis, keepdims=True) + 1e-12)
 
 
+def keep_tail(ids: list[int], max_tokens: int | None) -> list[int]:
+    """Keep the last ``max_tokens`` ids, like training's ``state_ids`` and vLLM's
+    ``truncate_prompt_tokens``: the question sits at the end of a state.  The endpoint
+    cannot tell states from actions (trained with ``keep="head"``), so tail is the single
+    default.  ``max_tokens`` falsy / <= 0 disables truncation."""
+    if not max_tokens or max_tokens <= 0:
+        return ids
+    return ids[-max_tokens:]
+
+
 class MlxEmbedder:
     """In-process last-token pooler over an mlx-lm Qwen3 checkpoint."""
 
@@ -73,7 +83,7 @@ class MlxEmbedder:
         """Pad to a rectangular batch; returns (input_ids [B,T], attention_mask [B,T])."""
         mx = self.mx
         encoded = [
-            self.tokenizer.encode(t, add_special_tokens=True)[: self.max_tokens]
+            keep_tail(self.tokenizer.encode(t, add_special_tokens=True), self.max_tokens)
             for t in texts
         ]
         if not encoded:
