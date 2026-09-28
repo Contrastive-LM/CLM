@@ -565,10 +565,11 @@ def run_choice(args) -> dict:
                 "per_question": {k: round(h / t, 4) for k, (h, t) in sorted(per.items())}}
 
     def majority_baseline(split):
+        # count option keys, not indices: a question's option list can differ between rows and splits
         counts = defaultdict(lambda: defaultdict(int))
         for e in ex["train"]:
-            counts[e.qid][e.label] += 1
-        hit = sum(e.label == max(counts[e.qid], key=counts[e.qid].get) for e in ex[split] if counts[e.qid])
+            counts[e.qid][e.keys[e.label]] += 1
+        hit = sum(e.keys[e.label] == max(counts[e.qid], key=counts[e.qid].get) for e in ex[split] if counts[e.qid])
         return hit / max(1, len(ex[split]))
 
     params = list(sh.parameters()) + list(ah.parameters()) + [logit_scale]
