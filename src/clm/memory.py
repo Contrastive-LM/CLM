@@ -18,7 +18,7 @@ from typing import Callable
 @dataclass
 class MemSnapshot:
     total_bytes: int
-    free_bytes: int          # free + speculative + purgeable (best-effort reclaimable)
+    free_bytes: int          # free + speculative + purgeable + inactive (best-effort reclaimable)
     pressure: str            # "normal" | "warn" | "critical" | "unknown"
     top: list[tuple[str, int]]  # (command, rss_bytes) worst offenders
 
@@ -57,7 +57,15 @@ def _vm_pages() -> dict[str, int]:
     return counts
 
 
+# kern.memorystatus_vm_pressure_level reports the dispatch/NOTE_MEMORYSTATUS_PRESSURE_* bits.
+_SYSCTL_PRESSURE = {1: "normal", 2: "warn", 4: "critical"}
+
+
 def _pressure_level() -> str:
+    level = _sysctl_int("kern.memorystatus_vm_pressure_level")
+    if level in _SYSCTL_PRESSURE:
+        return _SYSCTL_PRESSURE[level]
+    # Older macOS: parse ``memory_pressure``; newer builds may print only page counts.
     try:
         raw = subprocess.check_output(["memory_pressure"], text=True, stderr=subprocess.DEVNULL)
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -95,8 +103,9 @@ def snapshot() -> MemSnapshot:
     total = _sysctl_int("hw.memsize") or (16 << 30)
     pages = _vm_pages()
     page = pages.get("_page", 16384)
-    # reclaimable-ish: free + speculative + purgeable
-    free_pages = (pages.get("free", 0) + pages.get("speculative", 0) + pages.get("purgeable", 0))
+    # reclaimable-ish: free + speculative + purgeable + inactive (macOS parks file cache there)
+    free_pages = (pages.get("free", 0) + pages.get("speculative", 0) + pages.get("purgeable", 0)
+                  + pages.get("inactive", 0))
     free = free_pages * page
     return MemSnapshot(total_bytes=total, free_bytes=free, pressure=_pressure_level(), top=_top_rss())
 
