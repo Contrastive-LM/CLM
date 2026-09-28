@@ -18,7 +18,7 @@ from typing import Callable
 @dataclass
 class MemSnapshot:
     total_bytes: int
-    free_bytes: int          # free + speculative + purgeable + inactive (best-effort reclaimable)
+    free_bytes: int          # free + speculative + inactive (best-effort reclaimable)
     pressure: str            # "normal" | "warn" | "critical" | "unknown"
     top: list[tuple[str, int]]  # (command, rss_bytes) worst offenders
 
@@ -103,9 +103,10 @@ def snapshot() -> MemSnapshot:
     total = _sysctl_int("hw.memsize") or (16 << 30)
     pages = _vm_pages()
     page = pages.get("_page", 16384)
-    # reclaimable-ish: free + speculative + purgeable + inactive (macOS parks file cache there)
-    free_pages = (pages.get("free", 0) + pages.get("speculative", 0) + pages.get("purgeable", 0)
-                  + pages.get("inactive", 0))
+    # reclaimable-ish, same as psutil's "available": free + speculative + inactive (macOS parks
+    # file cache there).  Purgeable is left out: those pages already sit on the active/inactive
+    # queues, so adding it would double-count.
+    free_pages = pages.get("free", 0) + pages.get("speculative", 0) + pages.get("inactive", 0)
     free = free_pages * page
     return MemSnapshot(total_bytes=total, free_bytes=free, pressure=_pressure_level(), top=_top_rss())
 
