@@ -62,9 +62,10 @@ vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-mod
 clm-serve
 ```
 
-States longer than 2048 tokens are truncated. For longer states, raise both limits
-together, e.g. `--max-model-len 8192` on `vllm serve` and `clm-serve --max-tokens 8192`
-(needs more GPU memory).
+States longer than 2048 tokens are truncated: a state keeps its last 2048 tokens (the
+latest context and the question, which comes last), as in training, and a candidate its
+first 2048. For longer states, raise both limits together, e.g. `--max-model-len 8192`
+on `vllm serve` and `clm-serve --max-tokens 8192` (needs more GPU memory).
 
 ### Ask typed questions about a state
 
@@ -364,6 +365,7 @@ The code in this repository is released under the [Apache 2.0 License](LICENSE).
 ├── evaluation/bon_eval.py            # unified best-of-N evaluation
 ├── preprocessing/hf_embeddings.py    # embedding dir <-> Hugging Face dataset
 ├── requirements.txt             # pip install -r requirements.txt  (clm + torch + vLLM + example deps)
+├── tests/                       # python -m unittest discover tests  (no GPU, no network)
 ├── examples/                    # CLM vs Jev on the T-Rex runner (examples/t_rex/README.md)
 │   ├── common.py                #   one client for both endpoints: retries, latency, cache
 │   └── t_rex/                   #   Chrome dinosaur game in real time (run.py --model clm|jev)

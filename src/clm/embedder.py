@@ -30,17 +30,19 @@ class Embedder:
                  max_tokens: int | None = 2048, cache_size: int = 200_000, batch: int = 32,
                  timeout: float = 300.0, api_key: str | None = None):
         self.url, self.model, self.max_tokens, self.batch, self.timeout = url, model, max_tokens, batch, timeout
-        self.cache: OrderedDict[str, np.ndarray] = OrderedDict()
+        self.cache: OrderedDict[tuple[str | None, str], np.ndarray] = OrderedDict()   # (side, text)
         self.cache_size = cache_size
         self._lock = threading.Lock()
         self.session = requests.Session()
         if api_key:
             self.session.headers["Authorization"] = f"Bearer {api_key}"
 
-    def _fetch(self, texts: list[str]) -> tuple[list[np.ndarray], int]:
+    def _fetch(self, texts: list[str], side: str | None = None) -> tuple[list[np.ndarray], int]:
         body: dict[str, Any] = {"model": self.model, "input": texts, "encoding_format": "base64"}
         if self.max_tokens:
             body["truncate_prompt_tokens"] = self.max_tokens
+            if side:
+                body["truncation_side"] = side
         try:
             r = self.session.post(self.url, json=body, timeout=self.timeout)
         except requests.RequestException as e:
@@ -56,25 +58,31 @@ class Embedder:
             out[d["index"]] = l2(v.astype(np.float32))
         return out, int((j.get("usage") or {}).get("prompt_tokens", 0) or 0)
 
-    def embed(self, texts: list[str]) -> tuple[np.ndarray, int]:
-        """-> ([n, hidden] L2-normalised embeddings, encoder tokens spent on cache misses)."""
+    def embed(self, texts: list[str], truncation_side: str | None = None) -> tuple[np.ndarray, int]:
+        """-> ([n, hidden] L2-normalised embeddings, encoder tokens spent on cache misses).
+
+        ``truncation_side`` is the end a text longer than ``max_tokens`` loses: ``"left"``
+        keeps its last tokens, ``"right"`` its first; ``None`` leaves it to the server
+        (vLLM's pooling runner keeps the first).
+        """
+        side = truncation_side if self.max_tokens else None   # nothing is cut, so the side is moot
         vecs: dict[str, np.ndarray] = {}
         todo: list[str] = []
         with self._lock:
             for t in dict.fromkeys(texts):
-                v = self.cache.get(t)
+                v = self.cache.get((side, t))
                 if v is None:
                     todo.append(t)
                 else:
-                    self.cache.move_to_end(t); vecs[t] = v
+                    self.cache.move_to_end((side, t)); vecs[t] = v
         tokens = 0
         for i in range(0, len(todo), self.batch):
             chunk = todo[i:i + self.batch]
-            got, tk = self._fetch(chunk)
+            got, tk = self._fetch(chunk, side)
             tokens += tk
             with self._lock:
                 for t, v in zip(chunk, got):
-                    vecs[t] = v; self.cache[t] = v
+                    vecs[t] = v; self.cache[(side, t)] = v
                 while len(self.cache) > self.cache_size:
                     self.cache.popitem(last=False)
         return np.stack([vecs[t] for t in texts]), tokens
