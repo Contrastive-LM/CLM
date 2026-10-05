@@ -324,7 +324,7 @@ If you find CLM useful, please consider citing it:
 
 ```bibtex
 @misc{kwok2026contrastivelanguagemodels,
-  title={Contrastive Language Models: A System One Model for Fast and Generalizable Decision-Making},
+  title={Contrastive Language Models},
   author={Jacky Kwok and Hangoo Kang and Tarun Suresh and Jon Saad-Falcon and Marco Pavone and Christopher Ré and Azalia Mirhoseini},
   year={2026},
   note={Notion Blog},
