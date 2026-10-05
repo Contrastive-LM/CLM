@@ -362,6 +362,7 @@ The code in this repository is released under the [Apache 2.0 License](LICENSE).
 │   ├── adapters.py              #   dataset adapters: agentic traces, typed decisions
 │   └── embed_utils.py           #   encoder embeddings with the training token recipe
 ├── evaluation/bon_eval.py            # unified best-of-N evaluation
+├── evaluation/intent_routing/       # intent-routing benchmark: data prep, logreg baseline, results
 ├── preprocessing/hf_embeddings.py    # embedding dir <-> Hugging Face dataset
 ├── requirements.txt             # pip install -r requirements.txt  (clm + torch + vLLM + example deps)
 ├── examples/                    # CLM vs Jev on the T-Rex runner (examples/t_rex/README.md)
