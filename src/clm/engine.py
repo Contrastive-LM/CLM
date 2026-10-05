@@ -27,6 +27,10 @@ RAW_MODEL = "clm-raw"
 RAW_SCALE = 100.0
 RAW_SHARE = 0.125      # of the arena, for the raw ablation's wider vectors
 RELEASE = "2026-09-19"
+# vLLM's truncation_side for texts over the encoder's token limit ("left" drops the start),
+# as in train/embed_utils.py: a state keeps its tail (the latest context and the question,
+# which comes last), a candidate its head.
+STATE_TRUNCATION, ACTION_TRUNCATION = "left", "right"
 
 
 class ModelNotFound(KeyError):
@@ -72,10 +76,13 @@ class Engine:
         return arena
 
     # ------------------------------------------------------------------ cached vectors
-    def _cached(self, namespace: str, dim: int, texts: list[str], tokens: list[int], project=None):
-        """Vectors for ``texts``, from the arena where possible; ``tokens`` collects misses."""
+    def _cached(self, namespace: str, dim: int, texts: list[str], tokens: list[int], project=None,
+                side: str | None = None):
+        """Vectors for ``texts``, from the arena where possible; ``tokens`` collects misses.
+
+        ``side`` is the truncation side; it is fixed per namespace, so arena rows never mix the two."""
         def compute(missing: list[str]):
-            emb, spent = self.embedder.embed(missing)
+            emb, spent = self.embedder.embed(missing, truncation_side=side)
             tokens.append(spent)
             return project(emb) if project else self._to_device(emb)
 
@@ -121,13 +128,13 @@ class Engine:
         tokens: list[int] = []
         if head is None:
             # The raw ablation reuses the encoder's own vectors, in the encoder's own space.
-            zq = self._cached("raw/state", HIDDEN, states, tokens)
-            za = self._cached("raw/action", HIDDEN, cands, tokens)
+            zq = self._cached("raw/state", HIDDEN, states, tokens, side=STATE_TRUNCATION)
+            za = self._cached("raw/action", HIDDEN, cands, tokens, side=ACTION_TRUNCATION)
             scale = RAW_SCALE
         else:
             ns, dim = head.namespace, head.proj_dim
-            zq = self._cached(f"{ns}/state", dim, states, tokens, head.project_states)
-            za = self._cached(f"{ns}/action", dim, cands, tokens, head.project_actions)
+            zq = self._cached(f"{ns}/state", dim, states, tokens, head.project_states, STATE_TRUNCATION)
+            za = self._cached(f"{ns}/action", dim, cands, tokens, head.project_actions, ACTION_TRUNCATION)
             scale = head.scale
         answers, k = {}, 0
         for i, (qid, (_, keys, texts)) in enumerate(pairs.items()):
