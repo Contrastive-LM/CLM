@@ -83,12 +83,14 @@ r = client.system_one(
                              criteria=["Calm", "Frustrated", "Very angry"]),
     },
 )
-print(r.answers["urgency"].noul)                # 0.41022     probability the statement is true
-print(r.answers["department"].choice)           # billing
-print(r.answers["department"].probabilities)    # {'billing': 0.93878, 'technical': 0.06122}
-print(r.answers["frustration"].score)           # 1.98386     expected level, 0..2
-print(r.usage.input_tokens, r.latency_ms)       # 38 58.1     (106 tokens on a cold cache: option texts are embedded once)
+print(r.answers["urgency"].noul)                # probability the statement is true
+print(r.answers["department"].choice)           # e.g. billing
+print(r.answers["department"].probabilities)    # e.g. {'billing': 0.94, 'technical': 0.06}
+print(r.answers["frustration"].score)           # expected level, 0..2
+print(r.usage.input_tokens, r.latency_ms)       # token count and latency in milliseconds
 ```
+
+The numeric values and latency vary with the selected model, checkpoint, and cache state; the comments above show the shape of the result rather than fixed output.
 
 Questions may be `Noul` / `Choice` / `Score` objects or plain wire-format
 dicts, so a request written for TypeSafe replays as
