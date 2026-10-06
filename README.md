@@ -48,6 +48,31 @@ To install the latest from a clone:
 pip install -e .
 ```
 
+### Apple Silicon (Metal / MLX)
+
+Optional path for Macs without NVIDIA / vLLM. Uses a 4-bit MLX Qwen3-8B encoder
+and runs the released projection head on Metal:
+
+```bash
+bash scripts/setup_mlx.sh
+source .venv/bin/activate
+bash serve_mlx.sh
+```
+
+Or manually:
+
+```bash
+pip install -e '.[mlx]'
+clm-download
+# terminal 1
+clm-embed-mlx --port 8090
+# terminal 2
+clm-serve --device mlx --emb-url http://127.0.0.1:8090/v1/embeddings
+```
+
+Default encoder: `mlx-community/Qwen3-8B-4bit` (`CLM_MLX_MODEL` overrides).
+Needs roughly 8–12 GiB reclaimable unified memory. Linux / CUDA / vLLM is unchanged.
+
 ---
 
 ## Quickstart

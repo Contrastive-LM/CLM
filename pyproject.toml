@@ -26,8 +26,8 @@ dependencies = [
     "torch>=2.1",
     "fastapi>=0.100",
     "uvicorn>=0.23",
-    # the Qwen3-8B embedder (GPU)
-    "vllm>=0.6",
+    # the Qwen3-8B embedder (GPU; not available on macOS)
+    "vllm>=0.6; sys_platform != 'darwin'",
     # train/finetune.py: read the published Parquet embedding datasets
     "pyarrow>=14",
 ]
@@ -38,11 +38,14 @@ serve = []
 vllm = []
 # download checkpoints from the Hugging Face Hub with the hub client (plain HTTPS works without it)
 hf = ["huggingface_hub>=0.20"]
+# Apple Silicon: Metal heads + MLX Qwen3 embedding server (no vLLM / CUDA)
+mlx = ["mlx>=0.26", "mlx-lm>=0.22", "huggingface_hub>=0.20"]
 all = ["contrastive-lm[hf]"]
 
 [project.scripts]
 clm-serve = "clm.server:main"
 clm-download = "clm.heads:download_main"
+clm-embed-mlx = "clm.mlx_embed:main"
 
 [project.urls]
 Homepage = "https://github.com/Contrastive-LM/CLM"
