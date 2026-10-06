@@ -150,8 +150,8 @@ def clm_embedding_dir(args) -> str:
 
 def _load_clm_data(path, device, keep_tasks=None):
     """Load one embedding directory, optionally restricted to a task set."""
-    states = torch.load(os.path.join(path, "state_embeddings.pt"), map_location="cpu")
-    actions = torch.load(os.path.join(path, "action_embeddings.pt"), map_location="cpu")
+    states = torch.load(os.path.join(path, "state_embeddings.pt"), map_location="cpu", weights_only=True)
+    actions = torch.load(os.path.join(path, "action_embeddings.pt"), map_location="cpu", weights_only=True)
     samples = json.load(open(os.path.join(path, "metadata.json")))["samples"]
     if not (len(samples) == len(states) == len(actions)):
         raise ValueError(f"{path}: embedding and metadata lengths differ")
@@ -253,7 +253,7 @@ def _clm_batches(n, batch, sampler, task_idx, generator, tasks_per_batch):
 def _train_clm(args, emb_dir, out_dir, holdout_path):
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
     torch.manual_seed(args.seed)
-    checkpoint = (torch.load(args.init_ckpt, map_location="cpu", weights_only=False)
+    checkpoint = (torch.load(args.init_ckpt, map_location="cpu", weights_only=True)
                   if args.init_ckpt else None)
     initial = (checkpoint or {}).get("cfg", {})
     width = args.width or initial.get("width", 1536)
@@ -492,7 +492,7 @@ def run_choice(args) -> dict:
 
     data = {k: pack(v) for k, v in ex.items()}
 
-    ck = torch.load(args.init_ckpt, map_location="cpu", weights_only=False) if args.init_ckpt else None
+    ck = torch.load(args.init_ckpt, map_location="cpu", weights_only=True) if args.init_ckpt else None
     cfg = dict(width=args.width or 1536, depth=args.depth or 3, activation="gelu", layernorm=True, residual=False)
     if ck:
         c0 = ck.get("cfg", {})
@@ -627,7 +627,7 @@ def run_choice(args) -> dict:
             if bad >= args.patience:
                 print(f"[choice] early stop at epoch {ep}", flush=True)
                 break
-    best_ck = torch.load(os.path.join(args.out_dir, "best_head.pt"), map_location="cpu", weights_only=False)
+    best_ck = torch.load(os.path.join(args.out_dir, "best_head.pt"), map_location="cpu", weights_only=True)
     sh.load_state_dict(best_ck["state_head"]); ah.load_state_dict(best_ck["action_head"])
     with torch.no_grad():
         logit_scale.copy_(best_ck["logit_scale"].to(device))
