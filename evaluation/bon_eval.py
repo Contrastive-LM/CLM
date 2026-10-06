@@ -151,6 +151,8 @@ def main():
                     help="number of final step scores included in the mean (default: 12)")
     ap.add_argument("--output")
     ap.add_argument("--gpu", type=int, default=0)
+    ap.add_argument("--device", choices=("cpu", "cuda", "mps"),
+                    help="projection-head device (default: CUDA when available, else CPU)")
     args = ap.parse_args()
 
     if args.n < 1:
@@ -158,7 +160,12 @@ def main():
     if args.window < 1:
         ap.error("--window must be positive")
 
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
+    device_name = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
+    if device_name == "cuda" and not torch.cuda.is_available():
+        ap.error("CUDA is unavailable")
+    if device_name == "mps" and not torch.backends.mps.is_available():
+        ap.error("MPS is unavailable")
+    device = torch.device(f"cuda:{args.gpu}" if device_name == "cuda" else device_name)
     if args.hf_dataset:
         slug = "".join(c if c.isalnum() or c in "._-" else "_" for c in args.hf_dataset)
         args.embeddings_dir = hf_embeddings.download(

@@ -62,6 +62,8 @@ class Engine:
         """
         if budget is None:
             budget = os.environ.get("CLM_ACTION_CACHE")
+        if budget is None and self.device.startswith("mps"):
+            budget = 0
         try:
             arena = VectorArena(self.device, budget)
         except CacheDisabled:
