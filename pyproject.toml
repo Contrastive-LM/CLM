@@ -55,3 +55,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 clm = ["py.typed", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "train"]
