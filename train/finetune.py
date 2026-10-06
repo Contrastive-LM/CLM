@@ -51,11 +51,17 @@ sys.path.insert(0, HERE)
 import adapters  # noqa: E402
 import embed_utils  # noqa: E402
 import hf_embeddings  # noqa: E402
-from clm.heads import make_head  # noqa: E402
+from clm.heads import default_device, make_head  # noqa: E402
 
 
 def _slug(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", s).strip("_")
+
+
+def _device(gpu: int) -> torch.device:
+    """``cuda:<gpu>`` when CUDA is available, else whatever ``default_device()`` picks
+    (MPS on Apple Silicon, else CPU)."""
+    return torch.device(f"cuda:{gpu}") if torch.cuda.is_available() else torch.device(default_device())
 
 
 # --------------------------------------------------------------------------- #
@@ -251,7 +257,7 @@ def _clm_batches(n, batch, sampler, task_idx, generator, tasks_per_batch):
 
 
 def _train_clm(args, emb_dir, out_dir, holdout_path):
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
+    device = _device(args.gpu)
     torch.manual_seed(args.seed)
     checkpoint = (torch.load(args.init_ckpt, map_location="cpu", weights_only=False)
                   if args.init_ckpt else None)
@@ -475,7 +481,7 @@ def run_choice(args) -> dict:
         print(f"[choice] embedding {len(todo)} unique texts", flush=True)
         cache.add(todo, backend.embed([recipe.text_ids(t, keep="tail") for t in todo]))
 
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
+    device = _device(args.gpu)
 
     def pack(examples):  # one dense bucket per candidate count
         buckets = defaultdict(list)

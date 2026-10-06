@@ -90,7 +90,12 @@ class VectorArena:
         self.dtype = getattr(torch, dtype)
         if self.device.type == "cuda":
             free, total = torch.cuda.mem_get_info(self.device)
-        else:  # a CPU arena is still bounded, it just cannot ask the driver for a budget
+        elif self.device.type == "mps" and hasattr(torch.mps, "recommended_max_memory"):
+            # Metal has no mem_get_info equivalent; recommended_max_memory() is the driver's
+            # advisory ceiling for the whole unified-memory pool, torch 2.3+.
+            total = torch.mps.recommended_max_memory()
+            free = total - torch.mps.driver_allocated_memory()
+        else:  # cannot ask the driver for a budget (CPU, or MPS on torch < 2.3)
             free = total = 8 << 30
         want = parse_budget(budget, total)
         if want <= 0:

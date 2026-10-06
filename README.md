@@ -54,6 +54,8 @@ pip install -e .
 
 ### Serve
 
+**Linux + NVIDIA GPU** (vLLM):
+
 ```bash
 # 1. encoder (Qwen3-8B embeddings)
 vllm serve Qwen/Qwen3-8B --served-model-name qwen3-8b --runner pooling --max-model-len 2048 --port 8090 &
@@ -65,6 +67,41 @@ clm-serve
 States longer than 2048 tokens are truncated. For longer states, raise both limits
 together, e.g. `--max-model-len 8192` on `vllm serve` and `clm-serve --max-tokens 8192`
 (needs more GPU memory).
+
+**Apple Silicon** (llama.cpp; vLLM ships no macOS wheel, so `pip install -e .` skips
+it there -- see [below](#running-on-apple-silicon)):
+
+```bash
+# 1. encoder (Qwen3-8B embeddings), Metal-accelerated
+llama-server -hf unsloth/Qwen3-8B-GGUF:BF16 --alias qwen3-8b --embedding --pooling last \
+             -ngl 1024 -fa on -c 2048 --port 8090 &
+
+# 2. CLM API on :8700, heads on MPS
+clm-serve --emb-model qwen3-8b   # CLM_DEVICE=mps is picked automatically when torch sees MPS
+```
+
+States longer than 2048 tokens are truncated. For longer states, raise both limits
+together, e.g. `-c 8192` on `llama-server` and `clm-serve --max-tokens 8192`
+(needs more unified memory for the KV cache).
+
+### Running on Apple Silicon
+
+- `vllm` is dropped from `pip install -e .` on any non-Linux platform (`pyproject.toml`
+  marks it `sys_platform == 'linux'`), since vLLM has never published a macOS wheel and
+  its sdist needs a Linux/CUDA build toolchain. Everything else (`torch`, `fastapi`,
+  `uvicorn`, ...) installs normally on Apple Silicon.
+- `default_device()` auto-detects CUDA, then MPS, then falls back to CPU; `--device`
+  (or `CLM_DEVICE`) overrides it if you need to force one.
+- The embedder just needs an OpenAI-compatible `/v1/embeddings` endpoint -- `Embedder`
+  (`src/clm/embedder.py`) has no vLLM-specific code, so `llama-server` works as a
+  drop-in replacement: run it with `--embedding --pooling last` (matching the last-token
+  pooling the reference head was trained against) and point `clm-serve --emb-url` /
+  `CLM_EMB_URL` at its port if it isn't the default `:8090`.
+- Quantization of the encoder shifts its embeddings away from the fp16/bf16 space the
+  projection heads were trained on -- the more aggressive the quantization, the more
+  drift. Prefer BF16/F16 or Q8_0 GGUFs over something like Q4_K_M; if you do use a
+  lower quantization, validate scores against a known-good baseline (e.g.
+  `evaluation/bon_eval.py`) before trusting it.
 
 ### Ask typed questions about a state
 
@@ -343,7 +380,7 @@ The code in this repository is released under the [Apache 2.0 License](LICENSE).
 ```
 .
 ├── pyproject.toml               # the clm package (installed editable by requirements.txt)
-├── serve_qwen3_8b.sh            # launch the Qwen3-8B pooling encoder on a GPU
+├── serve_qwen3_8b.sh            # launch the Qwen3-8B encoder: vllm serve, or llama-server on Apple Silicon
 ├── download_head.sh             # fetch the released head (`clm-download` does the same)
 ├── assets/                      # logo + the playground screenshot used above
 ├── src/clm/                     # inference: the package `clm-serve` and `clm` ship
@@ -425,15 +462,15 @@ files only; every API route above shadows it.
 
 ```
 clm-serve [--port 8700] [--emb-url http://127.0.0.1:8090/v1/embeddings] [--emb-model qwen3-8b]
-          [--max-tokens 2048] [--ckpt PATH] [--ckpt-dir DIR] [--model NAME=PATH ...] [--device cpu|cuda]
+          [--max-tokens 2048] [--ckpt PATH] [--ckpt-dir DIR] [--model NAME=PATH ...] [--device cpu|cuda|mps]
           [--action-cache 0.02|512MiB|0] [--no-ui] [--cors]
 ```
 
 `--ckpt PATH` serves your own head as `clm-latest` (default: the reference
 head in `~/.cache/clm/`, downloaded if missing); `--ckpt-dir DIR` serves every
 `*.pt` there under its file stem; `--model NAME=PATH` adds one more.
-The heads run on the GPU when torch sees one, else on the CPU; `--device` (or
-`CLM_DEVICE`) forces one. Checkpoints hot-reload when the file changes. Set `CLM_API_KEY` to require
+The heads run on CUDA or Apple's MPS when torch sees one, else on the CPU;
+`--device` (`cpu`, `cuda` or `mps`) or `CLM_DEVICE` forces one. Checkpoints hot-reload when the file changes. Set `CLM_API_KEY` to require
 `Authorization: Bearer <key>` (the playground has a field for it). Environment
 equivalents: `CLM_PORT`, `CLM_EMB_URL`, `CLM_EMB_MODEL`, `CLM_CKPT`,
 `CLM_DEVICE`, `CLM_ACTION_CACHE`.
