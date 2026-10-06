@@ -424,9 +424,10 @@ files only; every API route above shadows it.
 ### `clm-serve` options
 
 ```
-clm-serve [--port 8700] [--emb-url http://127.0.0.1:8090/v1/embeddings] [--emb-model qwen3-8b]
-          [--max-tokens 2048] [--ckpt PATH] [--ckpt-dir DIR] [--model NAME=PATH ...] [--device cpu|cuda]
-          [--action-cache 0.02|512MiB|0] [--no-ui] [--cors]
+clm-serve [--host 127.0.0.1] [--port 8700] [--emb-url http://127.0.0.1:8090/v1/embeddings]
+          [--emb-model qwen3-8b] [--max-tokens 2048] [--ckpt PATH] [--ckpt-dir DIR]
+          [--model NAME=PATH ...] [--device cpu|cuda] [--action-cache 0.02|512MiB|0]
+          [--no-ui] [--cors] [--allow-anonymous]
 ```
 
 `--ckpt PATH` serves your own head as `clm-latest` (default: the reference
@@ -435,12 +436,19 @@ head in `~/.cache/clm/`, downloaded if missing); `--ckpt-dir DIR` serves every
 The heads run on the GPU when torch sees one, else on the CPU; `--device` (or
 `CLM_DEVICE`) forces one. Checkpoints hot-reload when the file changes. Set `CLM_API_KEY` to require
 `Authorization: Bearer <key>` (the playground has a field for it). Environment
-equivalents: `CLM_PORT`, `CLM_EMB_URL`, `CLM_EMB_MODEL`, `CLM_CKPT`,
+equivalents: `CLM_HOST`, `CLM_PORT`, `CLM_EMB_URL`, `CLM_EMB_MODEL`, `CLM_CKPT`,
 `CLM_DEVICE`, `CLM_ACTION_CACHE`.
 
 `--no-ui` drops the playground and serves the API alone. `--cors` allows browser
 requests from any origin and is off by default, because an API key otherwise
 travels in a header any page would then be free to send.
+
+`--host` defaults to `127.0.0.1`, so the API answers this machine only
+(`--host 0.0.0.0` to bind every interface, e.g. inside a container; `CLM_HOST`
+does the same). Reaching it from elsewhere takes `CLM_API_KEY`: `clm-serve`
+refuses to start when `--host` is not a loopback address, or `--cors` is passed,
+and no key is set — without a key, anyone who can reach the port drives the
+model. `--allow-anonymous` starts it anyway, for a network you trust.
 
 #### The vector cache
 
