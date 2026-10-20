@@ -142,19 +142,19 @@ class VectorArena:
                     pool.slots.move_to_end(key)
                     pool.hits += 1
         if missing:
-            pool.misses += len(missing)
             vectors = compute(missing)               # outside the lock: this is the slow path
             with self._lock:
+                pool.misses += len(missing)
                 for key, vector in zip(missing_keys, vectors):
                     pool.buffer[pool.claim(key)] = vector
         with self._lock:
             # Resolve under the lock: a concurrent request may have evicted a row and
             # handed the slot to another key since it was filled.
             rows = [pool.slots.get(k) for k in keys]
-            if any(r is None for r in rows):
-                return compute(texts)                # thrashing; answer without the arena
-            index = self.torch.as_tensor(rows, device=self.device, dtype=self.torch.long)
-            return pool.buffer.index_select(0, index)   # copies while the lock is held
+            if all(r is not None for r in rows):
+                index = self.torch.as_tensor(rows, device=self.device, dtype=self.torch.long)
+                return pool.buffer.index_select(0, index)   # copies while the lock is held
+        return compute(texts)                        # thrashing; answer without the arena, unlocked
 
     # ---------------------------------------------------------------- reporting
     def stats(self) -> dict:
