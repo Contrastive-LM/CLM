@@ -83,16 +83,17 @@ r = client.system_one(
                              criteria=["Calm", "Frustrated", "Very angry"]),
     },
 )
-print(r.answers["urgency"].noul)                # 0.41022     probability the statement is true
+print(r.answers["urgency"].noul)                # 0.41022     relative true/false score
 print(r.answers["department"].choice)           # billing
 print(r.answers["department"].probabilities)    # {'billing': 0.93878, 'technical': 0.06122}
-print(r.answers["frustration"].score)           # 1.98386     expected level, 0..2
+print(r.answers["frustration"].score)           # 1.98386     expected rubric index, 0..2
 print(r.usage.input_tokens, r.latency_ms)       # 38 58.1     (106 tokens on a cold cache: option texts are embedded once)
 ```
 
 Questions may be `Noul` / `Choice` / `Score` objects or plain wire-format
 dicts, so a request written for TypeSafe replays as
 `client.system_one(state, questions)`.
+See [Interpreting answers](#interpreting-answers) for score meanings and input limits.
 
 ### Rank candidates directly
 
@@ -379,6 +380,8 @@ live in the research repo's `main` branch.
 
 ## API Reference
 
+See [Interpreting answers](#interpreting-answers) for score meanings and input limits.
+
 ### `POST /v1/systemone`
 
 | field | |
@@ -394,12 +397,46 @@ live in the research repo's `main` branch.
 | `choice` | `instructions` (the question), `criteria: {option: description}` (each option is embedded as its description, or its key when the description is empty) | `{"choice", "confidence", "probabilities"}` |
 | `score` | `instructions`, `criteria: [level0, level1, …]` (ordered, ≥2) | `{"score", "confidence", "legend", "probabilities"}` |
 
-- `confidence` = top probability minus the mean of the others.
-- `score` = expected level index; `legend` maps indices back to the rubric.
+- `confidence` = top probability minus the mean of the others (1.0 for a one-option choice).
+- `score` = expected rubric index; `legend` maps indices back to the rubric.
 - `usage.input_tokens` counts encoder tokens spent on cache misses;
   `billing_units` is the number of questions.
 - Errors: `401` bad key · `422` malformed request or unknown model · `502`
   embedder unreachable. `X-CLM-Latency-Ms` carries the server-side time.
+
+### Interpreting answers
+
+Answers are relative to the supplied candidates. `noul` is the model's relative
+true/false score: the softmax weight of the `true` candidate against `false`.
+The API makes no empirical calibration guarantee for these softmax outputs
+(`noul`, `probabilities` and ranked `prob` values) or for the `confidence` margin.
+Candidate wording, the candidate set, the model's logit scale and `temperature`
+all affect the distribution; a large margin alone does not guarantee correctness.
+
+**Structural example, not model evidence:** a one-option `choice` with
+`criteria={"only": "Any option"}` returns `choice="only"`,
+`probabilities={"only": 1.0}` and `confidence=1.0` regardless of its logit.
+This degenerate relative margin is not evidence that the option is correct.
+
+`score` is the expected rubric index, starting at zero, not a universally
+comparable measurement. For three levels with probabilities `[0.2, 0.3, 0.5]`,
+it is `0*0.2 + 1*0.3 + 2*0.5 = 1.3`. Its meaning depends on the chosen rubric,
+including the spacing implied by its indices.
+
+The default `--max-tokens 2048` sets `truncate_prompt_tokens` on encoder
+requests. The limit applies to each rendered state-plus-question and each
+candidate text; longer inputs are truncated, so an answer need not reflect the
+entire original input. See [Serve](#serve) to raise the CLM and encoder limits
+together. This configured limit is not a report of observed truncation:
+`usage.input_tokens` aggregates encoder work on cache misses, not original
+input lengths or discarded-token counts. It is not a per-input truncation
+indicator, and a fully cached request can report zero even when its embeddings
+were computed from truncated inputs. Clients needing full-context guarantees
+must validate each rendered input with their encoder's tokenizer and token-limit
+configuration before inference, rather than infer completeness from usage.
+
+Use task-specific held-out validation before selecting decision thresholds.
+Abstention or escalation is a caller policy, not a built-in server feature.
 
 ### `POST /v1/rank`
 
