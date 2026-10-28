@@ -178,8 +178,9 @@ def _clm_loss(state_head, action_head, logit_scale, states, actions, codes):
     labels = torch.arange(len(states), device=states.device)
     same = codes.unsqueeze(0) == codes.unsqueeze(1)
     same.fill_diagonal_(False)
-    forward = F.cross_entropy(logits.masked_fill(same, float("-inf")), labels)
-    backward = F.cross_entropy(logits.t().masked_fill(same, float("-inf")), labels)
+    logits = logits.masked_fill(same, float("-inf"))
+    forward = F.cross_entropy(logits, labels)
+    backward = F.cross_entropy(logits.t(), labels)
     return (forward + backward) / 2, logits, labels
 
 
