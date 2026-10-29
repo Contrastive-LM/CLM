@@ -434,9 +434,11 @@ head in `~/.cache/clm/`, downloaded if missing); `--ckpt-dir DIR` serves every
 `*.pt` there under its file stem; `--model NAME=PATH` adds one more.
 The heads run on the GPU when torch sees one, else on the CPU; `--device` (or
 `CLM_DEVICE`) forces one. Checkpoints hot-reload when the file changes. Set `CLM_API_KEY` to require
-`Authorization: Bearer <key>` (the playground has a field for it). Environment
+`Authorization: Bearer <key>` (the playground has a field for it). Set `CLM_EMB_API_KEY`
+when the **encoder** requires one: it is sent to `--emb-url` only, and is never accepted
+from, or echoed to, a client of this server. Environment
 equivalents: `CLM_PORT`, `CLM_EMB_URL`, `CLM_EMB_MODEL`, `CLM_CKPT`,
-`CLM_DEVICE`, `CLM_ACTION_CACHE`.
+`CLM_DEVICE`, `CLM_ACTION_CACHE`, `CLM_EMB_API_KEY`.
 
 `--no-ui` drops the playground and serves the API alone. `--cors` allows browser
 requests from any origin and is off by default, because an API key otherwise
