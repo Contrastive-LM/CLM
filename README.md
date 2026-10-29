@@ -421,6 +421,29 @@ files only; every API route above shadows it.
             {"name": "clm-raw", "description": "Ablation: cosine in the raw encoder space", ...}]}
 ```
 
+### `GET /health`
+
+```json
+{"ok": true, "embedder": true, "models": ["clm-latest"], "cache": {...}}
+```
+
+Liveness and readiness are different questions, and `CLMClient` answers them
+separately:
+
+| helper | question | |
+| --- | --- | --- |
+| `health()` | liveness | the process answered and reported `ok`. An unreachable encoder does not change it, so this is what a process monitor should poll. |
+| `ready()` | readiness | liveness **and** `embedder: true`. Check it before scoring input the server has not cached yet. |
+
+`health_info()` returns the payload above, or `{}` when the server cannot be
+reached, answers outside 2xx, or replies with something other than a JSON
+object; `ready()` reads a missing or malformed `embedder` field as not ready.
+
+`embedder` is a reachability probe — the server asks the encoder for its model
+list. It is necessary for uncached work but is not proof of answer quality or of
+matching embedding geometry, and it is not an inference self-test: a warm
+embedding cache answers cached inputs without the encoder at all.
+
 ### `clm-serve` options
 
 ```

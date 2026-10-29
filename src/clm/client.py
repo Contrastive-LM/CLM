@@ -196,8 +196,48 @@ class CLMClient:
             raise CLMError(r.status_code, r.text)
         return r.json()["models"]
 
-    def health(self) -> bool:
+    def health_info(self) -> dict[str, Any]:
+        """The parsed ``GET /health`` payload, or ``{}`` when the server cannot be
+        reached, answers outside 2xx, or replies with something that is not a
+        JSON object.
+
+        The payload is passed through unchanged, so a caller can read the fields
+        the server adds later without waiting for a new client release.
+        """
         try:
-            return bool(self._s.get(f"{self.base_url}/health", timeout=5).json().get("ok"))
-        except Exception:  # noqa: BLE001
-            return False
+            r = self._s.get(f"{self.base_url}/health", timeout=5)
+        except requests.RequestException:
+            return {}
+        if not 200 <= r.status_code < 300:
+            return {}
+        try:
+            info = r.json()
+        except ValueError:      # requests.JSONDecodeError is a ValueError too
+            return {}
+        return info if isinstance(info, dict) else {}
+
+    def health(self) -> bool:
+        """Liveness: the server process answered and reported ``ok``.
+
+        Unchanged from earlier releases: a live server whose encoder is
+        unreachable still reports ``True``. Use :meth:`ready` before work that
+        needs the encoder.
+        """
+        return bool(self.health_info().get("ok"))
+
+    def ready(self) -> bool:
+        """Readiness to score input the server has not cached yet.
+
+        ``True`` only when the server is live **and** reports the encoder as
+        reachable. A missing, malformed or non-boolean ``embedder`` field, a
+        non-2xx response, unparsable JSON and a transport failure all read as
+        ``False`` rather than as ready.
+
+        This is a reachability signal, not a quality one: the probe behind it
+        asks the encoder for its model list. It does not run inference, so it
+        cannot prove the encoder returns vectors in the geometry the loaded head
+        was trained on. A warm embedding cache serves cached inputs without the
+        encoder, so a successful answer is not evidence that the encoder is up.
+        """
+        info = self.health_info()
+        return bool(info.get("ok")) and info.get("embedder") is True
