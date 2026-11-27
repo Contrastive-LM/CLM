@@ -1,6 +1,8 @@
 # finetuning
 
 This is an experiment to have the LLM autonomously improve CLM fine-tuning.
+To fine-tune on your own data, see `clm.finetune` in the
+[README](../README.md#fine-tuning-clm-on-your-own-data) instead.
 
 ## Setup
 
@@ -9,8 +11,8 @@ Work with the user to:
 1. Agree on `clm` or `choice`, a run tag, and a fixed training and evaluation
    command.
 2. Create a fresh `autofinetune/<tag>` branch.
-3. Read `README.md`, `train/finetune.py`, `train/adapters.py`,
-   `train/embed_utils.py`, `preprocessing/hf_embeddings.py`, and
+3. Read `README.md`, `src/clm/trainer.py`, `src/clm/adapters.py`,
+   `src/clm/embed_utils.py`, `src/clm/hf_embeddings.py`, and
    `evaluation/bon_eval.py`.
 4. Verify the dataset, checkpoint, folds, and GPU are available.
 5. Create an untracked `results.tsv` containing:
@@ -37,7 +39,7 @@ python evaluation/bon_eval.py ... --n <N> --window <K> >> run.log 2>&1
 
 **You may:**
 
-- Modify `train/finetune.py`.
+- Modify `src/clm/trainer.py`, the trainer that `train/finetune.py` runs.
 - Change the head, objective, optimizer, scheduler, batching, and
   hyperparameters.
 
@@ -73,7 +75,7 @@ Do not commit `results.tsv`, `run.log`, or run outputs.
 LOOP FOREVER:
 
 1. Inspect the current commit and previous results.
-2. Make one focused change to `train/finetune.py`.
+2. Make one focused change to `src/clm/trainer.py`.
 3. Commit it.
 4. Run training and evaluation.
 5. Record the result.

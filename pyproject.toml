@@ -28,7 +28,7 @@ dependencies = [
     "uvicorn>=0.23",
     # the Qwen3-8B embedder (GPU)
     "vllm>=0.6",
-    # train/finetune.py: read the published Parquet embedding datasets
+    # clm.finetune / clm-finetune: read the published Parquet embedding datasets
     "pyarrow>=14",
 ]
 
@@ -43,6 +43,7 @@ all = ["contrastive-lm[hf]"]
 [project.scripts]
 clm-serve = "clm.server:main"
 clm-download = "clm.heads:download_main"
+clm-finetune = "clm.trainer:main"
 
 [project.urls]
 Homepage = "https://github.com/Contrastive-LM/CLM"

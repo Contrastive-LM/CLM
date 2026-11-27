@@ -165,9 +165,69 @@ fine-tuning, CLM reaches SOTA on both (**81.6%** and **87.6%**) while running
 
 ## Fine-tuning CLM on Your Own Data
 
-See [docs/FINETUNING.md](docs/FINETUNING.md).
+The encoder stays frozen and only the two projection heads train, so a run costs one
+embedding pass over your data plus seconds to minutes of head training. With the
+encoder from the [quickstart](#serve) running:
+
+```python
+import clm
+
+# Load your dataset: a list of dicts or a .jsonl file
+trainset = "data/train.jsonl"
+valset = "data/val.jsonl"
+
+# Fine-tune the heads, warm-started from the reference head
+result = clm.finetune(trainset, valset)
+print(result.metric, result.baseline_score, "->", result.best_score)
+
+# Rank candidates with the head you trained
+engine = result.engine()
+engine.rank("What causes tides on Earth?", ["The Moon's gravitational pull.", "Photosynthesis in plants."])
+```
+
+The shape of the records picks the training task:
+
+| Your data | One record | Task |
+| --- | --- | --- |
+| Candidates with outcomes | `{"state": task, "candidates": [a, b, c], "rewards": [1, 0, 0]}` | `choice` |
+| Candidates with one gold answer | `{"state": ticket, "candidates": ["billing", "technical"], "label": "billing"}` | `choice` |
+| A positive and hard negatives | `{"question": q, "answer": a, "negatives": [n1, n2]}` | `choice` |
+| Agent step traces | `{"state": [...chat messages...], "action": "pytest -q", "task_id": "django-1234", "step_idx": 7}` | `clm` |
+| Plain pairs | `{"input": q, "answer": a}` | `clm` |
+
+`choice` trains each state against its own candidates and reports validation accuracy.
+`clm` trains each state against every other action in the batch; it reports within-task
+top-1 for step traces and validation loss for plain pairs. State and action may go by
+other names (`input` / `problem` / `question` / `prompt`, and `answer` / `output` /
+`response`); `src/clm/adapters.py` has the full list.
+
+`clm.finetune(trainset, valset=None, ...)` takes:
+
+- `valset`: validation records in the same form. Without one, `val_frac=0.1` of the
+  training tasks or records is held out.
+- `base_url`: the encoder server, as its `/v1` base or `/v1/embeddings` URL. The default
+  uses `CLM_EMB_URL`, then the server at `http://127.0.0.1:8090` if one is running, and
+  otherwise runs the encoder in-process with vLLM. The served model name and token
+  limit are read from the server.
+- `init`: the checkpoint to start from. The default is the reference head for Qwen3-8B;
+  `None` trains from scratch.
+- `out_dir` (default `runs/finetune`), `epochs`, `batch_size`, `lr`, `patience`, `seed`,
+  `model`, and any trainer option by its Python name, such as `max_len=4096` or
+  `targets="hard"`.
+
+It returns a `FinetuneResult`: `checkpoint` (the best head, `<out_dir>/best_head.pt`),
+`metric`, `baseline_score` (before training), `best_score`, `best_epoch` and `history`.
+`result.engine()` loads the head for ranking, and `clm-serve --ckpt runs/finetune/best_head.pt`
+serves it over HTTP.
+
+The same trainer is the `clm-finetune` command (`python train/finetune.py` from a clone),
+which also runs cross-validation folds and trains on published embedding datasets:
 
 ```bash
+# your own records, as above
+clm-finetune --task choice --data data/train.jsonl --val-data data/val.jsonl \
+    --embed-url http://localhost:8090/v1 --init-ckpt "$(clm-download)" --out-dir runs/mine
+
 # reproduce the task-disjoint DeepSWE heldout-38 result (31/38 = 81.6%)
 hf download Contrastive-LM/deepswe-clm-heads-8k --local-dir heads/deepswe
 python evaluation/bon_eval.py --hf-dataset Contrastive-LM/deepswe-clm-embeddings-8k \
@@ -182,6 +242,10 @@ python train/finetune.py --task clm --init-ckpt "$(clm-download)" --out-dir runs
 python train/finetune.py --task choice --data LocalLLaMA/typed-decisions --workflow all \
     --init-ckpt "$(clm-download)" --out-dir runs/typed
 ```
+
+To let an agent improve the trainer itself in an experiment loop, see
+[docs/FINETUNING.md](docs/FINETUNING.md). `pytest tests` checks `clm.finetune` offline,
+with a fake encoder.
 
 ---
 
@@ -346,8 +410,8 @@ The code in this repository is released under the [Apache 2.0 License](LICENSE).
 ├── serve_qwen3_8b.sh            # launch the Qwen3-8B pooling encoder on a GPU
 ├── download_head.sh             # fetch the released head (`clm-download` does the same)
 ├── assets/                      # logo + the playground screenshot used above
-├── src/clm/                     # inference: the package `clm-serve` and `clm` ship
-│   ├── __init__.py              #   from clm import CLMClient, Noul, Choice, Score, Engine
+├── src/clm/                     # the package `pip install contrastive-lm` ships
+│   ├── __init__.py              #   from clm import CLMClient, Noul, Choice, Score, Engine, finetune
 │   ├── client.py                #   CLMClient + question / answer types (no torch needed)
 │   ├── schema.py                #   question -> (state text, candidate texts); logits -> Answer
 │   ├── engine.py                #   Engine.answer(...) / Engine.rank(...): the inference engine
@@ -355,19 +419,22 @@ The code in this repository is released under the [Apache 2.0 License](LICENSE).
 │   ├── embedder.py              #   /v1/embeddings client + LRU cache of normalised embeddings
 │   ├── cache.py                 #   the reserved vector arena behind --action-cache
 │   ├── server.py                #   FastAPI app, `clm-serve`
+│   ├── finetuning.py            #   clm.finetune(trainset, valset): fine-tuning in one call
+│   ├── trainer.py               #   the trainer behind it, `clm-finetune`
+│   ├── adapters.py              #   dataset adapters: step traces, pairs, candidates, typed decisions
+│   ├── embed_utils.py           #   encoder embeddings with the training token recipe
+│   ├── hf_embeddings.py         #   embedding dir <-> Hugging Face dataset
 │   └── static/                  #   the playground: index.html + app.css + app.js, no build step
 ├── tools/playground_mock.py     # serve the playground without a GPU (fake encoder)
-├── train/                       # fine-tuning
-│   ├── finetune.py              #   trains the projection heads on a frozen encoder
-│   ├── adapters.py              #   dataset adapters: agentic traces, typed decisions
-│   └── embed_utils.py           #   encoder embeddings with the training token recipe
+├── train/finetune.py            # runs the trainer from a clone (same as `clm-finetune`)
 ├── evaluation/bon_eval.py            # unified best-of-N evaluation
-├── preprocessing/hf_embeddings.py    # embedding dir <-> Hugging Face dataset
+├── preprocessing/hf_embeddings.py    # runs the embedding converter from a clone
+├── tests/test_finetune.py       # offline tests for clm.finetune (`pytest tests`)
 ├── requirements.txt             # pip install -r requirements.txt  (clm + torch + vLLM + example deps)
 ├── examples/                    # CLM vs Jev on the T-Rex runner (examples/t_rex/README.md)
 │   ├── common.py                #   one client for both endpoints: retries, latency, cache
 │   └── t_rex/                   #   Chrome dinosaur game in real time (run.py --model clm|jev)
-└── docs/FINETUNING.md           # the fine-tuning guide
+└── docs/FINETUNING.md           # letting an agent improve the trainer in an experiment loop
 ```
 
 This branch carries the inference package, the playground, the fine-tuning script,
