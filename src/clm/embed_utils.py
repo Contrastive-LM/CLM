@@ -7,18 +7,16 @@ DeepSWE precompute in the research repo's ``main`` branch.
   ``max_len - 1`` tokens, ``keep="tail"`` the last.
 
 Backends take token ids: ``OfflineBackend`` (in-process vLLM) and ``ServerBackend``
-(``vllm serve <model> --runner pooling``).
+(``vllm serve <model> --runner pooling``). ``served`` asks a server which model it
+serves and how many tokens it accepts, so callers need not repeat either.
 """
 from __future__ import annotations
 
 import base64
-import os
-import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
-from clm.embedder import EmbedderError, l2  # noqa: E402
+from .embedder import EmbedderError, l2
 
 
 class Recipe:
@@ -104,3 +102,38 @@ class ServerBackend:
 def make_backend(url: str | None, model: str, max_len: int, gpu_mem: float = 0.85, served_name: str | None = None):
     """Server backend when ``url`` is given, else offline vLLM."""
     return ServerBackend(url, served_name or model) if url else OfflineBackend(model, max_len, gpu_mem)
+
+
+def embeddings_url(url: str) -> str:
+    """The ``/v1/embeddings`` endpoint for a server given as that URL, as its ``/v1``
+    base (the form OpenAI clients take), or as a bare ``http://host:port``."""
+    url = url.rstrip("/")
+    if url.endswith("/embeddings"):
+        return url
+    return url + ("/embeddings" if url.endswith("/v1") else "/v1/embeddings")
+
+
+def served(url: str, model: str | None = None, timeout: float = 10.0, api_key: str | None = None):
+    """-> (served model name, the server's token limit or None) for the model behind ``url``.
+
+    ``model`` may be the served name or the model it was loaded from (vLLM reports both);
+    a server with a single model needs neither. Raises ``EmbedderError`` when the server
+    is unreachable or serves several models and none matches.
+    """
+    import requests
+    models_url = embeddings_url(url).rsplit("/embeddings", 1)[0] + "/models"
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    try:
+        r = requests.get(models_url, timeout=timeout, headers=headers)
+        r.raise_for_status()
+        entries = r.json().get("data") or []
+    except (requests.RequestException, ValueError) as e:
+        raise EmbedderError(f"embedder unreachable at {models_url}: {e}") from e
+    match = [m for m in entries if model and model in (m.get("id"), m.get("root"))]
+    if not match and len(entries) == 1:
+        match = entries
+    if not match:
+        names = [m.get("id") for m in entries]
+        raise EmbedderError(f"{models_url} serves {names}; none is {model!r}. Pass the served model name.")
+    return match[0].get("id"), match[0].get("max_model_len")
+

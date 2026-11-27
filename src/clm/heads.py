@@ -1,6 +1,6 @@
 """Projection heads: architecture, checkpoint loading and download.
 
-A CLM checkpoint (as trained by ``train/finetune.py``) is a ``torch.save``
+A CLM checkpoint (as trained by ``clm.finetune`` / ``clm-finetune``) is a ``torch.save``
 dict with ``state_head`` / ``action_head`` state dicts, ``logit_scale`` (log of
 the InfoNCE temperature inverse) and ``cfg`` (``width``, ``depth``, optional
 ``projection_dim``, ``activation``, ``layernorm``, ``residual``).  Each head maps
