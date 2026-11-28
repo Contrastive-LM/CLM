@@ -1,0 +1,17 @@
+{
+  "dataset": "PolyAI/banking77",
+  "train_messages": 10003,
+  "test_messages": 3080,
+  "intents": 77,
+  "validation": {
+    "metric": "val_acc",
+    "reference_head": 0.131,
+    "fine_tuned": 0.888,
+    "best_epoch": 13
+  },
+  "test_accuracy": {
+    "reference_head": 0.1341,
+    "fine_tuned": 0.8802
+  },
+  "checkpoint": "runs/banking77/best_head.pt"
+}

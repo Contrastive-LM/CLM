@@ -153,6 +153,13 @@ def test_candidates_with_outcomes_train_the_choice_task(server, tmp_path):
     assert ranked[0]["candidate"] == CODES["lynx"]
 
 
+def test_softce_trains_each_state_against_its_own_candidates(server, tmp_path):
+    r = clm.finetune(choices(TRAIN), choices(VAL), base_url=server, out_dir=str(tmp_path), loss="softce", **FAST)
+    assert (r.task, r.metric) == ("choice", "val_acc")
+    assert r.best_score >= 0.8 and r.improvement > 0.3                               # chance is 1/3
+    assert torch.load(r.checkpoint, map_location="cpu", weights_only=False)["cfg"]["loss"] == "softce"
+
+
 def test_plain_pairs_train_the_clm_task(server, tmp_path):
     r = clm.finetune(pairs(TRAIN), pairs(VAL), base_url=server, out_dir=str(tmp_path), **FAST)
     assert (r.task, r.metric) == ("clm", "val_loss")           # one step per task: nothing to rank within
