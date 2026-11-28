@@ -2,6 +2,7 @@
 
     clm-serve --port 8700 --emb-url http://127.0.0.1:8090/v1/embeddings
     export CLM_API_KEY=...      # optional; then requests need "Authorization: Bearer <key>"
+    export CLM_EMB_API_KEY=...  # optional; sent to the encoder, not to clients of this server
 
     POST /v1/systemone   {"state": ..., "model": "clm-latest", "questions": {id: Question},
                           "temperature": 1.0}          -> {"model", "answers": {id: Answer}, "usage"}
@@ -170,6 +171,9 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=int(os.environ.get("CLM_PORT", 8700)))
     ap.add_argument("--emb-url", default=os.environ.get("CLM_EMB_URL", "http://127.0.0.1:8090/v1/embeddings"))
     ap.add_argument("--emb-model", default=os.environ.get("CLM_EMB_MODEL", "qwen3-8b"))
+    # No --emb-api-key: a secret on the command line lands in the process list and
+    # in shell history. CLM_EMB_API_KEY (below) is the documented way to reach a
+    # encoder that requires a bearer token.
     ap.add_argument("--max-tokens", type=int, default=int(os.environ.get("CLM_EMB_MAX_TOKENS", 2048)),
                     help="truncate texts to this many tokens before embedding (the embedder's max-model-len)")
     ap.add_argument("--ckpt", default=os.environ.get("CLM_CKPT"),
@@ -200,8 +204,12 @@ def main() -> None:
             raise SystemExit(f"--model expects NAME=PATH, got {spec!r}")
         extra[name] = path
     device = args.device or default_device()
-    engine = Engine(Embedder(args.emb_url, args.emb_model, max_tokens=args.max_tokens), checkpoint=ckpt,
-                    models=extra, checkpoint_dir=args.ckpt_dir, device=device,
+    # CLM_EMB_API_KEY authenticates this server to the encoder; CLM_API_KEY (below)
+    # authenticates clients to this server. They are independent: the encoder key is
+    # never accepted from, or echoed to, a client.
+    emb_api_key = os.environ.get("CLM_EMB_API_KEY") or None
+    engine = Engine(Embedder(args.emb_url, args.emb_model, max_tokens=args.max_tokens, api_key=emb_api_key),
+                    checkpoint=ckpt, models=extra, checkpoint_dir=args.ckpt_dir, device=device,
                     action_cache=args.action_cache)
     if not engine.heads and not extra:
         raise SystemExit("no checkpoint: pass --ckpt or let clm-serve download the reference head")
@@ -209,7 +217,7 @@ def main() -> None:
     app = create_app(engine, api_key, ui=not args.no_ui, cors=args.cors)
     print(f"[clm] models {[m['name'] for m in engine.models()]} on {device}", flush=True)
     print(f"[clm] embedder {args.emb_url} ({args.emb_model}) {'up' if engine.embedder.healthy() else 'NOT REACHABLE'}; "
-          f"auth {'on' if api_key else 'off'}", flush=True)
+          f"auth {'on' if api_key else 'off'}; encoder auth {'on' if emb_api_key else 'off'}", flush=True)
     arena = engine.arena
     if arena:
         pools = " + ".join(f"{p['capacity']:,}x{p['dim']}d" for p in arena.stats()["pools"].values())
