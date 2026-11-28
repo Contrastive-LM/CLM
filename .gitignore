@@ -18,3 +18,5 @@ logs/*.log
 examples/t_rex/data/
 examples/t_rex/cache/
 examples/t_rex/artifacts/
+# Fine-tuning runs (clm.finetune / clm-finetune default to runs/)
+runs/

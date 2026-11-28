@@ -243,6 +243,11 @@ python train/finetune.py --task choice --data LocalLLaMA/typed-decisions --workf
     --init-ckpt "$(clm-download)" --out-dir runs/typed
 ```
 
+For a worked example on a public dataset, see [examples/banking77](examples/banking77/README.md).
+It runs `clm.finetune` on 10,003 customer messages labelled with one of 77 banking intents, and
+test accuracy goes from 13.4% with the reference head to 88.0%. The whole script takes about a
+minute.
+
 To let an agent improve the trainer itself in an experiment loop, see
 [docs/FINETUNING.md](docs/FINETUNING.md). `pytest tests` checks `clm.finetune` offline,
 with a fake encoder.
@@ -431,14 +436,15 @@ The code in this repository is released under the [Apache 2.0 License](LICENSE).
 ├── preprocessing/hf_embeddings.py    # runs the embedding converter from a clone
 ├── tests/test_finetune.py       # offline tests for clm.finetune (`pytest tests`)
 ├── requirements.txt             # pip install -r requirements.txt  (clm + torch + vLLM + example deps)
-├── examples/                    # CLM vs Jev on the T-Rex runner (examples/t_rex/README.md)
+├── examples/                    # each with its own README
 │   ├── common.py                #   one client for both endpoints: retries, latency, cache
-│   └── t_rex/                   #   Chrome dinosaur game in real time (run.py --model clm|jev)
+│   ├── t_rex/                   #   CLM vs Jev on the Chrome dinosaur game in real time (run.py --model clm|jev)
+│   └── banking77/               #   fine-tuning for 77-way intent classification (finetune.py)
 └── docs/FINETUNING.md           # letting an agent improve the trainer in an experiment loop
 ```
 
 This branch carries the inference package, the playground, the fine-tuning script,
-the T-Rex example.
+the T-Rex example and the BANKING77 fine-tuning example.
 The scaling experiments, data pipelines and paper figures
 live in the research repo's `main` branch.
 

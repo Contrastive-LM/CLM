@@ -563,8 +563,9 @@ def run_choice(args) -> dict:
                         torch.tensor([e.label for e in es], device=device), [e.qid for e in es]))
         return out
 
-    data = {k: pack(v) for k, v in ex.items()}
-    hidden = int(data["train"][0][0].shape[-1])     # the encoder's embedding width
+    # infonce reads the training set as indices into `emb` below; only softce needs it packed densely
+    data = {k: pack(v) for k, v in ex.items() if k != "train" or args.loss == "softce"}
+    hidden = int(cache[ex["train"][0].state_text].shape[-1])     # the encoder's embedding width
 
     ck = torch.load(args.init_ckpt, map_location="cpu", weights_only=False) if args.init_ckpt else None
     cfg = dict(width=args.width or 1536, depth=args.depth or 3, activation="gelu", layernorm=True, residual=False)
@@ -649,7 +650,7 @@ def run_choice(args) -> dict:
 
     params = list(sh.parameters()) + list(ah.parameters()) + [logit_scale]
     opt = torch.optim.AdamW(params, lr=args.lr or 5e-4, weight_decay=args.weight_decay)
-    n_train = sum(len(b[3]) for b in data["train"])
+    n_train = len(ex["train"])
     per_epoch = (math.ceil(n_train / args.batch) if args.loss == "infonce" else
                  sum(math.ceil(len(b[3]) / args.batch) for b in data["train"]))
     steps = max(1, per_epoch) * args.epochs
